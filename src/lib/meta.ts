@@ -207,6 +207,60 @@ export function mapLead(detail: MetaLeadDetail): MappedLead {
   };
 }
 
+// ---- Historical backfill helpers ---------------------------------------------
+
+export interface MetaLeadForm {
+  id: string;
+  name: string;
+}
+
+/** List all lead-gen forms for a Page (cursor-paginated). */
+export async function fetchPageForms(pageId: string, pageToken: string): Promise<MetaLeadForm[]> {
+  const forms: MetaLeadForm[] = [];
+  let after: string | undefined;
+  do {
+    const json = await graphFetch(`${pageId}/leadgen_forms`, {
+      access_token: pageToken,
+      fields: "id,name",
+      limit: "100",
+      after,
+    });
+    const data = (json.data ?? []) as Array<{ id?: string; name?: string }>;
+    forms.push(...data.filter((f) => f.id).map((f) => ({ id: f.id!, name: f.name ?? "" })));
+    const paging = json.paging as { cursors?: { after?: string }; next?: string } | undefined;
+    after = paging?.next && paging.cursors?.after ? paging.cursors.after : undefined;
+  } while (after);
+  return forms;
+}
+
+export interface RawMetaLead {
+  id: string;
+  field_data: Array<{ name: string; values: string[] }>;
+  created_time?: string;
+  ad_id?: string;
+  form_id?: string;
+  platform?: string;
+}
+
+/** Fetch all leads for a form (cursor-paginated). */
+export async function fetchFormLeads(formId: string, pageToken: string): Promise<RawMetaLead[]> {
+  const leads: RawMetaLead[] = [];
+  let after: string | undefined;
+  do {
+    const json = await graphFetch(`${formId}/leads`, {
+      access_token: pageToken,
+      fields: "field_data,created_time,ad_id,form_id,platform",
+      limit: "100",
+      after,
+    });
+    const data = (json.data ?? []) as RawMetaLead[];
+    leads.push(...data);
+    const paging = json.paging as { cursors?: { after?: string }; next?: string } | undefined;
+    after = paging?.next && paging.cursors?.after ? paging.cursors.after : undefined;
+  } while (after);
+  return leads;
+}
+
 // ---- Webhook signature --------------------------------------------------------
 
 /** Verify Meta's `X-Hub-Signature-256` header (HMAC-SHA256 of the raw body). */

@@ -7,6 +7,8 @@ import {
   disconnectMetaPage,
   setMetaPageEnabled,
   setMetaPageOwner,
+  importHistoricalLeads,
+  type ImportResult,
 } from "@/app/(app)/settings/integrations/meta-actions";
 import type { MetaLeadPage } from "@/lib/types";
 
@@ -43,6 +45,7 @@ export default function MetaLeadsCard({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmPage, setConfirmPage] = useState<MetaLeadPage | null>(null);
+  const [importResults, setImportResults] = useState<Record<string, ImportResult>>({});
 
   async function toggle(page: MetaLeadPage, enabled: boolean) {
     setError(null);
@@ -60,6 +63,15 @@ export default function MetaLeadsCard({
     setBusyId(null);
     if (!res.ok) setError(res.error ?? "Could not update.");
     else router.refresh();
+  }
+
+  async function startImport(page: MetaLeadPage) {
+    setError(null);
+    setBusyId(page.page_id);
+    const res = await importHistoricalLeads(page.page_id);
+    setBusyId(null);
+    setImportResults((prev) => ({ ...prev, [page.page_id]: res }));
+    if (!res.ok) setError(res.error ?? "Import failed.");
   }
 
   async function confirmDisconnect() {
@@ -156,12 +168,29 @@ export default function MetaLeadsCard({
 
                 <button
                   type="button"
+                  onClick={() => startImport(page)}
+                  disabled={busyId === page.page_id}
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                >
+                  {busyId === page.page_id ? "Importing…" : "Import past leads"}
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setConfirmPage(page)}
                   disabled={busyId === page.page_id}
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Disconnect
                 </button>
+
+                {importResults[page.page_id] && (
+                  <span className={`text-xs font-medium ${importResults[page.page_id].ok ? "text-green-600" : "text-red-600"}`}>
+                    {importResults[page.page_id].ok
+                      ? `✓ ${importResults[page.page_id].imported} imported, ${importResults[page.page_id].skipped} skipped`
+                      : importResults[page.page_id].error}
+                  </span>
+                )}
               </div>
             </div>
           ))}
