@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Default brand ramp (Sirah blue) as space-separated RGB channels. A tenant's
+   primary colour overrides these at runtime via an injected :root block — see
+   src/lib/branding.ts (brandRampStyle) and the (app) layout. */
+:root {
+  --brand-50: 238 241 251;
+  --brand-100: 220 226 247;
+  --brand-500: 42 62 184;
+  --brand-700: 7 22 137;
+}
+
+html,
+body {
+  background: #f6f7fb;
+  color: #0f172a;
+}
