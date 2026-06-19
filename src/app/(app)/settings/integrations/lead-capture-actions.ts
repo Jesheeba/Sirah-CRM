@@ -4,12 +4,9 @@ import { revalidatePath } from "next/cache";
 import { getUserContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-function appBase() {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
-}
-
-export function buildCaptureUrl(token: string) {
-  return `${appBase()}/api/leads/capture?token=${token}`;
+function buildUrl(token: string) {
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+  return `${base}/api/leads/capture?token=${token}`;
 }
 
 export async function regenerateCaptureToken(): Promise<{ ok: boolean; url?: string; error?: string }> {
@@ -31,5 +28,5 @@ export async function regenerateCaptureToken(): Promise<{ ok: boolean; url?: str
   if (error || !data) return { ok: false, error: error?.message ?? "Failed to regenerate." };
 
   revalidatePath("/settings/integrations");
-  return { ok: true, url: buildCaptureUrl(data.lead_capture_token as string) };
+  return { ok: true, url: buildUrl(data.lead_capture_token as string) };
 }

@@ -6,7 +6,6 @@ import { metaConfigured } from "@/lib/meta";
 import IntegrationsClient from "@/components/settings/IntegrationsClient";
 import MetaLeadsCard from "@/components/settings/MetaLeadsCard";
 import WebToLeadCard from "@/components/settings/WebToLeadCard";
-import { buildCaptureUrl } from "@/app/(app)/settings/integrations/lead-capture-actions";
 import type { IntegrationSetting, MetaLeadPage } from "@/lib/types";
 
 export default async function IntegrationsPage({
@@ -48,7 +47,8 @@ export default async function IntegrationsPage({
     (m) => ({ id: m.id, name: m.full_name || m.email || "User" }),
   );
   const captureToken = (tenantResult.data as { lead_capture_token?: string } | null)?.lead_capture_token ?? null;
-  const captureUrl = captureToken ? buildCaptureUrl(captureToken) : null;
+  const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+  const captureUrl = captureToken ? `${appBase}/api/leads/capture?token=${captureToken}` : null;
 
   return (
     <div className="space-y-4">
