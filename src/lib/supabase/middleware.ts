@@ -39,6 +39,7 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/api/email/open") ||
     path.startsWith("/api/whatsapp/webhook") ||
     path.startsWith("/api/meta/leadgen") ||
+    path.startsWith("/api/leads/capture") ||
     path.startsWith("/api/calendar/ics");
 
   if (!user && !isPublic) {

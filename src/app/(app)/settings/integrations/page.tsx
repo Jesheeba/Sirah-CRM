@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserContext } from "@/lib/auth";
 import { metaConfigured } from "@/lib/meta";
 import IntegrationsClient from "@/components/settings/IntegrationsClient";
 import MetaLeadsCard from "@/components/settings/MetaLeadsCard";
+import WebToLeadCard from "@/components/settings/WebToLeadCard";
+import { buildCaptureUrl } from "@/app/(app)/settings/integrations/lead-capture-actions";
 import type { IntegrationSetting, MetaLeadPage } from "@/lib/types";
 
 export default async function IntegrationsPage({
@@ -21,7 +24,9 @@ export default async function IntegrationsPage({
 
   // Fetch NON-SECRET columns only — secret columns are unreadable by this client by design.
   const supabase = await createClient();
-  const [{ data: settingsData }, { data: pagesData }, { data: membersData }] = await Promise.all([
+  const admin = createAdminClient();
+
+  const [{ data: settingsData }, { data: pagesData }, { data: membersData }, tenantResult] = await Promise.all([
     supabase
       .from("integration_settings")
       .select(
@@ -34,6 +39,7 @@ export default async function IntegrationsPage({
       )
       .order("created_at", { ascending: true }),
     supabase.from("profiles").select("id, full_name, email"),
+    admin.from("tenants").select("lead_capture_token").eq("id", ctx.tenantId!).maybeSingle(),
   ]);
 
   const settings = (settingsData ?? []) as IntegrationSetting[];
@@ -41,6 +47,8 @@ export default async function IntegrationsPage({
   const members = ((membersData ?? []) as Array<{ id: string; full_name: string | null; email: string | null }>).map(
     (m) => ({ id: m.id, name: m.full_name || m.email || "User" }),
   );
+  const captureToken = (tenantResult.data as { lead_capture_token?: string } | null)?.lead_capture_token ?? null;
+  const captureUrl = captureToken ? buildCaptureUrl(captureToken) : null;
 
   return (
     <div className="space-y-4">
@@ -61,6 +69,8 @@ export default async function IntegrationsPage({
         reason={first(sp.reason)}
         connectedCount={first(sp.pages)}
       />
+
+      {captureUrl && <WebToLeadCard captureUrl={captureUrl} />}
 
       <IntegrationsClient initial={settings} />
     </div>
