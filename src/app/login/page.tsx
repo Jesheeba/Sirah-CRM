@@ -35,9 +35,11 @@ async function resolveSlug(orgParam?: string): Promise<string | null> {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ org?: string }>;
+  searchParams: Promise<{ org?: string; joined?: string }>;
 }) {
-  const slug = await resolveSlug((await searchParams).org);
+  const sp = await searchParams;
+  const slug = await resolveSlug(sp.org);
+  const joined = sp.joined === "1";
 
   let branding: LoginBranding | null = null;
   if (slug) {
@@ -62,6 +64,7 @@ export default async function LoginPage({
         logoUrl={branding?.logo_url ?? null}
         welcomeMessage={branding?.welcome_message ?? null}
         companyDescription={branding?.company_description ?? null}
+        joined={joined}
       />
     </div>
   );

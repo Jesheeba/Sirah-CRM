@@ -69,7 +69,10 @@ export interface Deal {
   amount: number;
   currency: string;
   status: DealStatus;
+  probability: number;
+  lost_reason: string | null;
   expected_close_date: string | null;
+  closed_at: string | null;
   owner_id: string | null;
   created_at: string;
   accounts?: { name: string } | null;
@@ -333,8 +336,8 @@ export interface Communication {
 }
 
 // ---- Integration settings (per-tenant provider config) ----------------------
-export type IntegrationChannel = "email" | "whatsapp" | "sms";
-export const INTEGRATION_CHANNELS: IntegrationChannel[] = ["email", "whatsapp", "sms"];
+export type IntegrationChannel = "email" | "whatsapp" | "sms" | "whatsapp_device";
+export const INTEGRATION_CHANNELS: IntegrationChannel[] = ["email", "whatsapp", "sms", "whatsapp_device"];
 
 /**
  * Non-secret view of a tenant's integration config. Secret columns
@@ -350,8 +353,10 @@ export interface IntegrationSetting {
   phone_id: string | null;
   business_account_id: string | null;
   sms_sender_id: string | null;
+  api_endpoint: string | null;
   secret_set: boolean;
   secret_last4: string | null;
+  app_secret_set: boolean;
 }
 
 // ---- Meta (Facebook/Instagram) Lead Ads (0023) ------------------------------

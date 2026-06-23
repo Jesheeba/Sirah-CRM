@@ -7,6 +7,7 @@ const ITEMS = [
   { href: "/settings/branding", label: "Branding" },
   { href: "/settings/organization", label: "Organization" },
   { href: "/settings/users", label: "Users & Roles" },
+  { href: "/settings/pipelines", label: "Pipelines" },
   { href: "/settings/custom-fields", label: "Custom Fields" },
   { href: "/settings/workflows", label: "Workflows" },
   { href: "/settings/integrations", label: "Integrations" },

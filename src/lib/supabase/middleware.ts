@@ -31,15 +31,19 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isAuthPage = path.startsWith("/login") || path.startsWith("/signup");
-  // Public machine endpoints: the email tracking pixel and the WhatsApp webhook
-  // are hit by external services / logged-out recipients.
+  // Public machine endpoints: hit by external services / logged-out recipients.
   const isPublic =
     isAuthPage ||
     path.startsWith("/auth") ||
+    path.startsWith("/join") ||
+    path.startsWith("/api/invite/accept") ||
     path.startsWith("/api/email/open") ||
     path.startsWith("/api/whatsapp/webhook") ||
+    path.startsWith("/api/whatsapp/device/") ||   // UltraMsg inbound webhook (token in path)
+    path.startsWith("/api/whatsapp/cloud/") ||    // Meta Cloud API inbound webhook
     path.startsWith("/api/meta/leadgen") ||
     path.startsWith("/api/leads/capture") ||
+    path.startsWith("/api/sirahagents/") ||        // sirahagents.com seller registration
     path.startsWith("/api/calendar/ics");
 
   if (!user && !isPublic) {

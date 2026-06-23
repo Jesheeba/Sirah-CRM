@@ -25,11 +25,11 @@ export default async function IntegrationsPage({
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  const [{ data: settingsData }, { data: pagesData }, { data: membersData }, tenantResult] = await Promise.all([
+  const [{ data: settingsData }, { data: pagesData }, { data: membersData }, tenantResult, deviceRow, cloudRow] = await Promise.all([
     supabase
       .from("integration_settings")
       .select(
-        "id, channel, is_enabled, from_email, from_name, phone_id, business_account_id, sms_sender_id, secret_set, secret_last4",
+        "id, channel, is_enabled, from_email, from_name, phone_id, business_account_id, sms_sender_id, api_endpoint, secret_set, secret_last4, app_secret_set",
       ),
     supabase
       .from("meta_lead_pages")
@@ -39,6 +39,21 @@ export default async function IntegrationsPage({
       .order("created_at", { ascending: true }),
     supabase.from("profiles").select("id, full_name, email"),
     admin.from("tenants").select("lead_capture_token").eq("id", ctx.tenantId!).maybeSingle(),
+    // webhook_token is a secret — only the service-role admin client can read it.
+    // We construct the full URL here (server component) and pass only the URL string to the client.
+    admin
+      .from("integration_settings")
+      .select("webhook_token")
+      .eq("tenant_id", ctx.tenantId!)
+      .eq("channel", "whatsapp_device")
+      .maybeSingle(),
+    // verify_token is a secret — read server-side, passed as a plain string prop (not raw DB column).
+    admin
+      .from("integration_settings")
+      .select("verify_token")
+      .eq("tenant_id", ctx.tenantId!)
+      .eq("channel", "whatsapp")
+      .maybeSingle(),
   ]);
 
   const settings = (settingsData ?? []) as IntegrationSetting[];
@@ -49,6 +64,17 @@ export default async function IntegrationsPage({
   const captureToken = (tenantResult.data as { lead_capture_token?: string } | null)?.lead_capture_token ?? null;
   const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
   const captureUrl = captureToken ? `${appBase}/api/leads/capture?token=${captureToken}` : null;
+
+  // Construct webhook URLs server-side — secrets never leave this server component.
+  const deviceToken = (deviceRow.data as { webhook_token?: string } | null)?.webhook_token ?? null;
+  const deviceWebhookUrl = deviceToken
+    ? `${appBase}/api/whatsapp/device/webhook/${deviceToken}`
+    : null;
+
+  // Cloud webhook URL is static (no secret in the URL — auth is done via verify_token + HMAC).
+  const cloudWebhookUrl = `${appBase}/api/whatsapp/cloud/webhook`;
+  const cloudVerifyToken =
+    (cloudRow.data as { verify_token?: string } | null)?.verify_token ?? null;
 
   return (
     <div className="space-y-4">
@@ -72,7 +98,12 @@ export default async function IntegrationsPage({
 
       {captureUrl && <WebToLeadCard captureUrl={captureUrl} />}
 
-      <IntegrationsClient initial={settings} />
+      <IntegrationsClient
+        initial={settings}
+        webhookUrl={deviceWebhookUrl}
+        cloudWebhookUrl={cloudWebhookUrl}
+        cloudVerifyToken={cloudVerifyToken}
+      />
     </div>
   );
 }

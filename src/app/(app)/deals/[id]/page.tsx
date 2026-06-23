@@ -103,6 +103,7 @@ export default async function DealDetail({
         stages={(stagesRes.data ?? []) as Stage[]}
         currentStageId={deal.stage_id}
         currentStatus={deal.status as DealStatus}
+        lostReason={(deal as { lost_reason?: string | null }).lost_reason ?? null}
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[18rem_1fr_18rem]">

@@ -11,6 +11,7 @@ export interface LoginFormProps {
   logoUrl: string | null;
   welcomeMessage: string | null;
   companyDescription: string | null;
+  joined?: boolean;
 }
 
 export default function LoginForm({
@@ -18,6 +19,7 @@ export default function LoginForm({
   logoUrl,
   welcomeMessage,
   companyDescription,
+  joined,
 }: LoginFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -61,6 +63,12 @@ export default function LoginForm({
           <p className="mt-1 text-xs text-slate-400">{companyDescription}</p>
         )}
       </div>
+
+      {joined && (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+          Account created! Sign in with your new credentials.
+        </div>
+      )}
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
