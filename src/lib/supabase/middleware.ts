@@ -44,7 +44,9 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/api/meta/leadgen") ||
     path.startsWith("/api/leads/capture") ||
     path.startsWith("/api/sirahagents/") ||        // sirahagents.com seller registration
-    path.startsWith("/api/calendar/ics");
+    path.startsWith("/api/calendar/ics") ||
+    path === "/privacy" ||
+    path === "/terms";
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
