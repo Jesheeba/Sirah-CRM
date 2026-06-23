@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { mergeTemplate } from "@/lib/email";
 import type { CommRelatedType, EmailTemplate } from "@/lib/types";
-import { sendWhatsApp } from "@/app/(app)/whatsapp/actions";
+import { sendWhatsApp, sendTemplate } from "@/app/(app)/whatsapp/actions";
 
 export interface WaPrefill {
   to?: string;
@@ -40,6 +40,7 @@ export default function WhatsAppComposer({
   const [to, setTo] = useState(prefill?.to ?? "");
   const [body, setBody] = useState(prefill?.body ?? "");
   const [templateId, setTemplateId] = useState("");
+  const [useMetaTemplate, setUseMetaTemplate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,18 +52,29 @@ export default function WhatsAppComposer({
 
   async function submit() {
     if (!to.trim()) return setError("A phone number is required.");
-    if (!body.trim()) return setError("Message is required.");
+    if (!useMetaTemplate && !body.trim()) return setError("Message is required.");
     setBusy(true);
     setError(null);
-    const res = await sendWhatsApp({
-      to_phone: to,
-      to_name: prefill?.toName ?? null,
-      body,
-      template_id: templateId || null,
-      related_to_type: prefill?.related_to_type ?? null,
-      related_to_id: prefill?.related_to_id ?? null,
-      quotation_id: prefill?.quotation_id ?? null,
-    });
+    const res = useMetaTemplate
+      ? await sendTemplate({
+          to_phone: to,
+          to_name: prefill?.toName ?? null,
+          templateName: "hello_world",
+          languageCode: "en_US",
+          components: [],
+          related_to_type: prefill?.related_to_type ?? null,
+          related_to_id: prefill?.related_to_id ?? null,
+          quotation_id: prefill?.quotation_id ?? null,
+        })
+      : await sendWhatsApp({
+          to_phone: to,
+          to_name: prefill?.toName ?? null,
+          body,
+          template_id: templateId || null,
+          related_to_type: prefill?.related_to_type ?? null,
+          related_to_id: prefill?.related_to_id ?? null,
+          quotation_id: prefill?.quotation_id ?? null,
+        });
     setBusy(false);
     if (!res.ok) return setError(res.error ?? "Send failed.");
     if (res.waUrl) window.open(res.waUrl, "_blank", "noopener");
@@ -100,8 +112,19 @@ export default function WhatsAppComposer({
           </div>
           <div>
             <label className={LABEL}>Message</label>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} className={INPUT} />
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} className={INPUT} disabled={useMetaTemplate} />
           </div>
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={useMetaTemplate}
+              onChange={(e) => setUseMetaTemplate(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            <span className="text-sm text-slate-600">
+              Send as Meta template (<code className="rounded bg-slate-100 px-1 text-xs">hello_world</code>)
+            </span>
+          </label>
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-2">
