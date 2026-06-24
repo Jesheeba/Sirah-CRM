@@ -1,12 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   clearIntegrationSecret,
   saveIntegration,
   saveWhatsAppCloudConfig,
   type SaveIntegrationInput,
 } from "@/app/(app)/settings/integrations/actions";
+import { connectWhatsAppEmbedded } from "@/app/(app)/settings/integrations/embedded-signup-actions";
+
+declare global {
+  interface Window {
+    FB?: {
+      init: (params: Record<string, unknown>) => void;
+      login: (
+        callback: (response: { authResponse?: { code?: string } | null }) => void,
+        params: Record<string, unknown>,
+      ) => void;
+    };
+    fbAsyncInit?: () => void;
+    __waSignup?: { waba_id?: string; phone_number_id?: string };
+  }
+}
 import { type IntegrationChannel, type IntegrationSetting } from "@/lib/types";
 
 type FieldKey =
@@ -193,6 +209,8 @@ function WhatsAppCloudCard({
   cloudWebhookUrl: string;
   cloudVerifyToken?: string | null;
 }) {
+  const router = useRouter();
+
   const [enabled, setEnabled] = useState(initial?.is_enabled ?? false);
   const [phoneId, setPhoneId] = useState(initial?.phone_id ?? "");
   const [wabaId, setWabaId] = useState(initial?.business_account_id ?? "");
@@ -207,6 +225,105 @@ function WhatsAppCloudCard({
   const [saved, setSaved] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
+
+  // Embedded Signup state
+  const [connecting, setConnecting] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  // Load the Facebook JS SDK once.
+  useEffect(() => {
+    if (typeof window === "undefined" || window.FB) return;
+    if (document.getElementById("fb-sdk")) return;
+    window.fbAsyncInit = () => {
+      window.FB!.init({
+        appId: process.env.NEXT_PUBLIC_FB_APP_ID ?? "",
+        version: "v22.0",
+        xfbml: false,
+        cookie: true,
+      });
+    };
+    const script = document.createElement("script");
+    script.id = "fb-sdk";
+    script.src = "https://connect.facebook.net/en_US/sdk.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
+
+  // Capture waba_id + phone_number_id from the Embedded Signup popup message.
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (
+        event.origin !== "https://www.facebook.com" &&
+        event.origin !== "https://web.facebook.com"
+      )
+        return;
+      try {
+        const data = JSON.parse(event.data as string) as {
+          type?: string;
+          event?: string;
+          data?: { waba_id?: string; phone_number_id?: string };
+        };
+        if (
+          data.type === "WA_EMBEDDED_SIGNUP" &&
+          (data.event === "FINISH" || data.event === "FINISH_ONLY_WABA")
+        ) {
+          window.__waSignup = data.data;
+        }
+      } catch {
+        // Non-JSON message — ignore.
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  function launchWhatsAppSignup() {
+    const configId = process.env.NEXT_PUBLIC_FB_CONFIG_ID;
+    if (!configId) {
+      setConnectError("NEXT_PUBLIC_FB_CONFIG_ID is not set. Check your environment variables.");
+      return;
+    }
+    if (!window.FB) {
+      setConnectError("Facebook SDK is still loading. Please try again in a moment.");
+      return;
+    }
+    setConnecting(true);
+    setConnectError(null);
+    window.__waSignup = undefined;
+
+    window.FB.login(
+      async (response) => {
+        const code = response.authResponse?.code;
+        if (!code) {
+          // User closed the popup without completing signup.
+          setConnecting(false);
+          return;
+        }
+        const { waba_id, phone_number_id } = window.__waSignup ?? {};
+        if (!waba_id || !phone_number_id) {
+          setConnectError("Signup completed but WABA or phone ID was not received. Please try again.");
+          setConnecting(false);
+          return;
+        }
+        const res = await connectWhatsAppEmbedded({ code, waba_id, phone_number_id });
+        setConnecting(false);
+        if (!res.ok) {
+          setConnectError(res.error ?? "Connection failed.");
+          return;
+        }
+        setConnected(true);
+        setSecretSet(true);
+        router.refresh();
+      },
+      {
+        config_id: configId,
+        response_type: "code",
+        override_default_response_type: true,
+        extras: { setup: {}, featureType: "", sessionInfoVersion: 3 },
+      },
+    );
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -400,6 +517,33 @@ function WhatsAppCloudCard({
             <span className="font-mono">messages</span> field.
           </p>
         </div>
+      </div>
+
+      {/* Embedded Signup — one-click automatic credential setup */}
+      <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+        <p className="mb-1 text-xs font-semibold text-blue-800">Automatic setup</p>
+        <p className="mb-3 text-xs text-blue-700">
+          Click the button below to log in with Facebook and connect your WhatsApp Business account
+          — no manual token copying needed.
+        </p>
+        {connected && (
+          <div className="mb-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+            Connected ✓ — credentials saved automatically.
+          </div>
+        )}
+        {connectError && (
+          <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {connectError}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={launchWhatsAppSignup}
+          disabled={connecting}
+          className="rounded-lg bg-[#25D366] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+        >
+          {connecting ? "Connecting…" : secretSet ? "Reconnect WhatsApp" : "Connect WhatsApp"}
+        </button>
       </div>
 
       <label className="flex items-center gap-2 text-sm text-slate-600">
