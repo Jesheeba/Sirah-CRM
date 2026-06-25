@@ -293,10 +293,9 @@ function WhatsAppCloudCard({
     window.__waSignup = undefined;
 
     window.FB.login(
-      async (response) => {
+      (response) => {
         const code = response.authResponse?.code;
         if (!code) {
-          // User closed the popup without completing signup.
           setConnecting(false);
           return;
         }
@@ -306,15 +305,21 @@ function WhatsAppCloudCard({
           setConnecting(false);
           return;
         }
-        const res = await connectWhatsAppEmbedded({ code, waba_id, phone_number_id });
-        setConnecting(false);
-        if (!res.ok) {
-          setConnectError(res.error ?? "Connection failed.");
-          return;
-        }
-        setConnected(true);
-        setSecretSet(true);
-        router.refresh();
+        connectWhatsAppEmbedded({ code, waba_id, phone_number_id })
+          .then((res) => {
+            setConnecting(false);
+            if (!res.ok) {
+              setConnectError(res.error ?? "Connection failed.");
+              return;
+            }
+            setConnected(true);
+            setSecretSet(true);
+            router.refresh();
+          })
+          .catch(() => {
+            setConnecting(false);
+            setConnectError("Connection failed. Please try again.");
+          });
       },
       {
         config_id: configId,
