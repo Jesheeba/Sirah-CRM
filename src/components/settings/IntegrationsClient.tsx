@@ -253,12 +253,13 @@ function WhatsAppCloudCard({
   // Capture waba_id + phone_number_id from the Embedded Signup popup message.
   useEffect(() => {
     function onMessage(event: MessageEvent) {
+      // Log ALL messages so we can see what origin Facebook actually uses.
+      console.log("[WA Signup] message origin:", event.origin, "data:", event.data);
       if (
         event.origin !== "https://www.facebook.com" &&
         event.origin !== "https://web.facebook.com"
       )
         return;
-      console.log("[WA Signup] raw message from Facebook:", event.data);
       try {
         const data = JSON.parse(event.data as string) as {
           type?: string;
