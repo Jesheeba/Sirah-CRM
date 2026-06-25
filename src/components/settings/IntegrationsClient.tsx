@@ -299,27 +299,35 @@ function WhatsAppCloudCard({
           setConnecting(false);
           return;
         }
-        const { waba_id, phone_number_id } = window.__waSignup ?? {};
-        if (!waba_id || !phone_number_id) {
-          setConnectError("Signup completed but WABA or phone ID was not received. Please try again.");
-          setConnecting(false);
-          return;
-        }
-        connectWhatsAppEmbedded({ code, waba_id, phone_number_id })
-          .then((res) => {
+        // Poll up to 2 s for the message event to deliver waba_id + phone_number_id.
+        let attempts = 0;
+        const tryConnect = () => {
+          const { waba_id, phone_number_id } = window.__waSignup ?? {};
+          if (waba_id && phone_number_id) {
+            connectWhatsAppEmbedded({ code, waba_id, phone_number_id })
+              .then((res) => {
+                setConnecting(false);
+                if (!res.ok) {
+                  setConnectError(res.error ?? "Connection failed.");
+                  return;
+                }
+                setConnected(true);
+                setSecretSet(true);
+                router.refresh();
+              })
+              .catch(() => {
+                setConnecting(false);
+                setConnectError("Connection failed. Please try again.");
+              });
+          } else if (attempts < 10) {
+            attempts++;
+            setTimeout(tryConnect, 200);
+          } else {
+            setConnectError("Signup completed but WABA or phone ID was not received. Please try again.");
             setConnecting(false);
-            if (!res.ok) {
-              setConnectError(res.error ?? "Connection failed.");
-              return;
-            }
-            setConnected(true);
-            setSecretSet(true);
-            router.refresh();
-          })
-          .catch(() => {
-            setConnecting(false);
-            setConnectError("Connection failed. Please try again.");
-          });
+          }
+        };
+        tryConnect();
       },
       {
         config_id: configId,
