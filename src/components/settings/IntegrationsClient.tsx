@@ -536,14 +536,25 @@ function WhatsAppCloudCard({
             {connectError}
           </div>
         )}
-        <button
-          type="button"
-          onClick={launchWhatsAppSignup}
-          disabled={connecting}
-          className="rounded-lg bg-[#25D366] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-        >
-          {connecting ? "Connecting…" : secretSet ? "Reconnect WhatsApp" : "Connect WhatsApp"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={launchWhatsAppSignup}
+            disabled={connecting}
+            className="rounded-lg bg-[#25D366] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {connecting ? "Connecting…" : secretSet ? "Reconnect WhatsApp" : "Connect WhatsApp"}
+          </button>
+          {connecting && (
+            <button
+              type="button"
+              onClick={() => setConnecting(false)}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       </div>
 
       <label className="flex items-center gap-2 text-sm text-slate-600">
