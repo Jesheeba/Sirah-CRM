@@ -258,12 +258,14 @@ function WhatsAppCloudCard({
         event.origin !== "https://web.facebook.com"
       )
         return;
+      console.log("[WA Signup] raw message from Facebook:", event.data);
       try {
         const data = JSON.parse(event.data as string) as {
           type?: string;
           event?: string;
           data?: { waba_id?: string; phone_number_id?: string };
         };
+        console.log("[WA Signup] parsed:", data.type, data.event, data.data);
         if (
           data.type === "WA_EMBEDDED_SIGNUP" &&
           (data.event === "FINISH" || data.event === "FINISH_ONLY_WABA")
