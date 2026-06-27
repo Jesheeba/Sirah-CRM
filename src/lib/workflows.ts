@@ -48,6 +48,8 @@ export const TRIGGER_TYPES: TriggerType[] = [
   "record_created",
   "record_updated",
   "field_changed",
+  "schedule",
+  "event",
 ];
 
 export const CONDITION_OPERATORS: ConditionOperator[] = [
@@ -60,12 +62,21 @@ export const CONDITION_OPERATORS: ConditionOperator[] = [
   "changed_to",
 ];
 
-export const ACTION_TYPES: ActionType[] = ["create_task", "update_field"];
+export const ACTION_TYPES: ActionType[] = [
+  "create_task",
+  "update_field",
+  "send_email",
+  "send_whatsapp",
+  "assign_owner",
+  "webhook",
+];
 
 export const TRIGGER_LABELS: Record<TriggerType, string> = {
   record_created: "Record created",
   record_updated: "Record updated",
   field_changed: "Field changed",
+  schedule: "On schedule",
+  event: "On event",
 };
 
 export const OPERATOR_LABELS: Record<ConditionOperator, string> = {
@@ -81,6 +92,10 @@ export const OPERATOR_LABELS: Record<ConditionOperator, string> = {
 export const ACTION_LABELS: Record<ActionType, string> = {
   create_task: "Create task",
   update_field: "Update field",
+  send_email: "Send email",
+  send_whatsapp: "Send WhatsApp",
+  assign_owner: "Assign owner",
+  webhook: "Call webhook",
 };
 
 export const ENTITY_LABEL: Record<EntityType, string> = {

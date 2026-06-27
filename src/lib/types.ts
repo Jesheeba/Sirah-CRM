@@ -446,7 +446,12 @@ export const CUSTOM_FIELD_TYPES: CustomFieldType[] = [
 ];
 
 // ---- Workflow automation (Module 8) -----------------------------------------
-export type TriggerType = "record_created" | "record_updated" | "field_changed";
+export type TriggerType =
+  | "record_created"
+  | "record_updated"
+  | "field_changed"
+  | "schedule"
+  | "event";
 export type ConditionOperator =
   | "eq"
   | "neq"
@@ -455,7 +460,13 @@ export type ConditionOperator =
   | "contains"
   | "is_empty"
   | "changed_to";
-export type ActionType = "create_task" | "update_field";
+export type ActionType =
+  | "create_task"
+  | "update_field"
+  | "send_email"
+  | "send_whatsapp"
+  | "assign_owner"
+  | "webhook";
 
 export interface Workflow {
   id: string;
