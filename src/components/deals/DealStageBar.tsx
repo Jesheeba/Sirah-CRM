@@ -11,27 +11,59 @@ const STATUS_STYLE: Record<DealStatus, string> = {
   lost: "bg-rose-100 text-rose-700",
 };
 
+const DEFAULT_REASONS = [
+  "Budget / price too high",
+  "Chose a competitor",
+  "No budget this cycle",
+  "Bad timing",
+  "No decision made",
+  "Lost contact",
+  "Product fit",
+  "Other",
+];
+
 function LostReasonModal({
+  reasons,
   onConfirm,
   onCancel,
 }: {
-  onConfirm: (reason: string) => void;
+  reasons: string[];
+  onConfirm: (reason: string, notes: string) => void;
   onCancel: () => void;
 }) {
+  const list = reasons.length ? reasons : DEFAULT_REASONS;
   const [reason, setReason] = useState("");
+  const [notes, setNotes] = useState("");
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-lg">
         <h2 className="mb-1 text-base font-semibold text-slate-800">Why is this deal lost?</h2>
         <p className="mb-4 text-sm text-slate-500">A reason is required to track why deals are lost.</p>
-        <textarea
-          autoFocus
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder="e.g. Budget constraints, chose a competitor, bad timing…"
-          rows={3}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
-        />
+        <div className="mb-3">
+          <label className="mb-1 block text-xs font-medium text-slate-600">Reason *</label>
+          <select
+            autoFocus
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          >
+            <option value="">Select a reason…</option>
+            {list.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Notes (optional)</label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Additional context…"
+            rows={3}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+        </div>
         <div className="mt-4 flex justify-end gap-2">
           <button
             onClick={onCancel}
@@ -40,8 +72,8 @@ function LostReasonModal({
             Cancel
           </button>
           <button
-            onClick={() => { if (reason.trim()) onConfirm(reason.trim()); }}
-            disabled={!reason.trim()}
+            onClick={() => { if (reason) onConfirm(reason, notes.trim()); }}
+            disabled={!reason}
             className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
           >
             Mark Lost
@@ -58,12 +90,14 @@ export default function DealStageBar({
   currentStageId,
   currentStatus,
   lostReason: initialLostReason,
+  lostReasonOptions = [],
 }: {
   dealId: string;
   stages: Stage[];
   currentStageId: string;
   currentStatus: DealStatus;
   lostReason?: string | null;
+  lostReasonOptions?: string[];
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -79,7 +113,7 @@ export default function DealStageBar({
   const wonStage = ordered.find((s) => s.is_won);
   const lostStage = ordered.find((s) => s.is_lost);
 
-  async function move(toId: string, reason?: string) {
+  async function move(toId: string, reason?: string, notes?: string) {
     if (toId === stageId || busy) return;
 
     const targetStage = ordered.find((s) => s.id === toId);
@@ -94,6 +128,7 @@ export default function DealStageBar({
       deal_id: dealId,
       to_stage_id: toId,
       p_lost_reason: reason ?? null,
+      p_lost_notes: notes ?? null,
     });
     setBusy(false);
     if (rpcError) {
@@ -174,8 +209,9 @@ export default function DealStageBar({
 
       {lostPending && (
         <LostReasonModal
-          onConfirm={(reason) => {
-            void move(lostPending, reason);
+          reasons={lostReasonOptions}
+          onConfirm={(reason, notes) => {
+            void move(lostPending, reason, notes);
             setLostPending(null);
           }}
           onCancel={() => setLostPending(null)}

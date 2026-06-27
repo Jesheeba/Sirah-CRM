@@ -39,7 +39,7 @@ export default async function DealDetail({
     .maybeSingle();
   if (!deal) notFound();
 
-  const [stagesRes, notesRes, actsRes, tasksRes, quotesRes] = await Promise.all([
+  const [stagesRes, notesRes, actsRes, tasksRes, quotesRes, settingsRes] = await Promise.all([
     supabase.from("stages").select("*").eq("pipeline_id", deal.pipeline_id).order("display_order"),
     supabase
       .from("notes")
@@ -63,8 +63,11 @@ export default async function DealDetail({
       .eq("deal_id", id)
       .is("deleted_at", null)
       .order("created_at", { ascending: false }),
+    supabase.rpc("get_tenant_settings"),
   ]);
   const quotes = (quotesRes.data ?? []) as Quotation[];
+  const tenantSettings = (settingsRes.data ?? {}) as Record<string, unknown>;
+  const lostReasonOptions = (tenantSettings.win_loss_reasons as string[] | undefined) ?? [];
 
   const items: TimelineItem[] = [
     ...((notesRes.data ?? []) as any[]).map((n) => ({
@@ -104,6 +107,7 @@ export default async function DealDetail({
         currentStageId={deal.stage_id}
         currentStatus={deal.status as DealStatus}
         lostReason={(deal as { lost_reason?: string | null }).lost_reason ?? null}
+        lostReasonOptions={lostReasonOptions}
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[18rem_1fr_18rem]">

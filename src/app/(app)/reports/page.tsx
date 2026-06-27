@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getUserContext } from "@/lib/auth";
 import ReportsClient from "@/components/reports/ReportsClient";
@@ -21,6 +22,22 @@ export default async function ReportsPage() {
           Filter and export your CRM data. {ctx.isRep ? "Showing your own records." : "Org-wide."}
         </p>
       </div>
+      {/* Analytics sub-reports */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Link
+          href="/reports/win-loss"
+          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-brand hover:shadow-sm transition-all"
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-600 text-lg">
+            📊
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-700">Win-Loss Analysis</p>
+            <p className="text-xs text-slate-400">Why deals are won and lost</p>
+          </div>
+        </Link>
+      </div>
+
       <ReportsClient
         members={(membersRes.data ?? []) as Member[]}
         savedReports={(savedRes.data ?? []) as SavedReport[]}
