@@ -53,7 +53,7 @@ export default async function LoginPage({
 
   return (
     <div
-      className={`flex min-h-screen items-center justify-center p-4 ${
+      className={`flex min-h-screen flex-col items-center justify-center p-4 ${
         bg ? "bg-cover bg-center" : ""
       }`}
       style={bg ? { backgroundImage: `url(${bg})` } : undefined}
@@ -66,6 +66,11 @@ export default async function LoginPage({
         companyDescription={branding?.company_description ?? null}
         joined={joined}
       />
+      <p className="mt-6 text-center text-xs text-slate-400">
+        <a href="/privacy" className="hover:underline">Privacy Policy</a>
+        {" · "}
+        <a href="/terms" className="hover:underline">Terms of Service</a>
+      </p>
     </div>
   );
 }

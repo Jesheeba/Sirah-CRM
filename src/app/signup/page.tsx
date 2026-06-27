@@ -100,6 +100,11 @@ export default function SignupPage() {
             Sign in
           </Link>
         </p>
+        <p className="mt-4 text-center text-xs text-slate-400">
+          <Link href="/privacy" className="hover:underline">Privacy Policy</Link>
+          {" · "}
+          <Link href="/terms" className="hover:underline">Terms of Service</Link>
+        </p>
       </div>
     </div>
   );
