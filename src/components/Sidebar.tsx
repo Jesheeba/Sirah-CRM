@@ -65,6 +65,16 @@ export default function Sidebar() {
               Admin
             </div>
             <Link
+              href="/import"
+              className={`block rounded-lg px-3 py-2 text-sm font-medium ${
+                pathname.startsWith("/import")
+                  ? "bg-brand-50 text-brand"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              Data Import
+            </Link>
+            <Link
               href="/settings"
               className={`block rounded-lg px-3 py-2 text-sm font-medium ${
                 pathname.startsWith("/settings")
