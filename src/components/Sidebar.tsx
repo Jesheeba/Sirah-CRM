@@ -16,6 +16,7 @@ const ACTIVE: { href: string; key: ModuleKey }[] = [
   { href: "/deals", key: "deals" },
   { href: "/products", key: "products" },
   { href: "/quotations", key: "quotations" },
+  { href: "/invoices", key: "invoices" },
   { href: "/email", key: "email" },
   { href: "/whatsapp", key: "whatsapp" },
   { href: "/tasks", key: "tasks" },

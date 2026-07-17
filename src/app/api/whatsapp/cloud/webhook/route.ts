@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizePhone } from "@/lib/whatsapp";
 
@@ -14,51 +14,45 @@ const STATUS_MAP: Record<string, string> = {
   failed: "failed",
 };
 
-/**
- * Webhook verification handshake (Meta calls GET once on subscribe).
- * Per-tenant: looks up verify_token in integration_settings, NOT a deployment-wide env var.
- * A 403 is safe to return here — Meta only sees this once during subscription setup.
- */
 export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
-  const mode = params.get("hub.mode");
-  const token = params.get("hub.verify_token");
+  const mode      = params.get("hub.mode");
+  const token     = params.get("hub.verify_token");
   const challenge = params.get("hub.challenge");
 
-  if (mode !== "subscribe" || !token) {
-    return new NextResponse("forbidden", { status: 403 });
+  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
+
+  if (mode !== "subscribe" || !token || !verifyToken || token !== verifyToken) {
+    return new NextResponse("Forbidden", { status: 403 });
   }
 
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("integration_settings")
-    .select("tenant_id")
-    .eq("verify_token", token)   // secret column — service-role reads it
-    .eq("channel", "whatsapp")
-    .maybeSingle();
-
-  if (!data) {
-    return new NextResponse("forbidden", { status: 403 });
-  }
-
-  // Return the challenge as plain text — Meta requires exactly this response.
-  return new NextResponse(challenge ?? "", { status: 200 });
+  return new NextResponse(challenge ?? "", {
+    status: 200,
+    headers: { "Content-Type": "text/plain" },
+  });
 }
 
-/**
- * Inbound messages + delivery-status receipts from the Meta WhatsApp Cloud API.
- * One shared endpoint for ALL tenants — routed by phone_number_id inside the payload.
- *
- * Auth: HMAC-SHA256 of the raw request body, verified against X-Hub-Signature-256 using
- * the tenant's app_secret. Invalid / missing signature → 200 silently (don't reveal existence).
- *
- * Always returns 200 so Meta does not retry indefinitely on transient errors.
- */
 export async function POST(req: NextRequest) {
-  try {
-    // Buffer raw body FIRST — required for HMAC before JSON.parse consumes it.
-    const rawBody = await req.text();
+  // Reject immediately if the platform app secret is absent — nothing can be verified.
+  const appSecret = process.env.WHATSAPP_APP_SECRET;
+  if (!appSecret) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
 
+  // Buffer raw body FIRST — required for HMAC before JSON.parse consumes it.
+  const rawBody = await req.text();
+
+  // Validate HMAC-SHA256 signature before touching the payload or hitting the DB.
+  const sig     = req.headers.get("x-hub-signature-256") ?? "";
+  const expected = "sha256=" + createHmac("sha256", appSecret).update(rawBody).digest("hex");
+  const sigBuf  = Buffer.from(sig);
+  const expBuf  = Buffer.from(expected);
+  // timingSafeEqual requires equal-length buffers; length mismatch → invalid sig.
+  if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+
+  try {
     let parsed: MetaWebhookPayload;
     try {
       parsed = JSON.parse(rawBody) as MetaWebhookPayload;
@@ -69,36 +63,25 @@ export async function POST(req: NextRequest) {
     // phone_number_id is how we route to the correct tenant.
     const phoneNumberId =
       parsed.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+    console.log("[wa-webhook] phone_number_id:", phoneNumberId, "object:", parsed.object);
     if (!phoneNumberId) {
       return NextResponse.json({ received: true });
     }
 
     const admin = createAdminClient();
 
-    // Resolve tenant by phone_id. Also reads app_secret (service-role required).
+    // Resolve tenant by phone_id — app_secret verified globally above, not needed per-row.
     const { data: setting } = await admin
       .from("integration_settings")
-      .select("tenant_id, app_secret")
+      .select("tenant_id")
       .eq("phone_id", phoneNumberId)
       .eq("channel", "whatsapp")
       .eq("is_enabled", true)
       .maybeSingle();
 
+    console.log("[wa-webhook] tenant lookup:", setting?.tenant_id ?? "NOT FOUND");
     if (!setting) {
       return NextResponse.json({ received: true });
-    }
-
-    // HMAC verification — protects against spoofed / replayed payloads.
-    // If app_secret is configured, the signature MUST match. If it's not yet set,
-    // we process the payload anyway (allows initial setup before secret is saved).
-    if (setting.app_secret) {
-      const sig = req.headers.get("x-hub-signature-256") ?? "";
-      const expected =
-        "sha256=" +
-        createHmac("sha256", setting.app_secret).update(rawBody).digest("hex");
-      if (sig !== expected) {
-        return NextResponse.json({ received: true }); // silent drop
-      }
     }
 
     const tenantId = setting.tenant_id;

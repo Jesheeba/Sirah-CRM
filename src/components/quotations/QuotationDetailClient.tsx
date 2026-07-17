@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/reports";
 import { computeTotals, lineTotal, quoteNumber, QUOTE_STATUS_STYLE } from "@/lib/quotations";
+import { createInvoiceFromQuotation } from "@/app/(app)/invoices/actions";
 import {
   DISCOUNT_TYPES,
   QUOTATION_STATUSES,
@@ -97,6 +98,7 @@ export default function QuotationDetailClient({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [invPending, startInvTransition] = useTransition();
 
   const totals = computeTotals(lines, discountType, discountValue);
 
@@ -240,6 +242,19 @@ export default function QuotationDetailClient({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() =>
+              startInvTransition(async () => {
+                const res = await createInvoiceFromQuotation(quotation.id);
+                if (res.ok && res.id) router.push(`/invoices/${res.id}`);
+                else setError(res.error ?? "Could not create invoice.");
+              })
+            }
+            disabled={invPending}
+            className="rounded-lg border border-brand px-3 py-2 text-sm text-brand hover:bg-brand-50 disabled:opacity-50"
+          >
+            {invPending ? "Creating…" : "→ Create Invoice"}
+          </button>
           <button
             onClick={emailQuote}
             className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"

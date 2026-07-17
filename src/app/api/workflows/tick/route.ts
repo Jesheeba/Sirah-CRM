@@ -114,6 +114,14 @@ export async function POST(req: NextRequest) {
     }),
   );
 
+  // Mark invoices as overdue: sent + past due date → overdue
+  await admin
+    .from("invoices")
+    .update({ status: "overdue" })
+    .eq("status", "sent")
+    .lt("due_date", new Date().toISOString().slice(0, 10))
+    .is("deleted_at", null);
+
   return NextResponse.json({ processed: batch.length, done, failed });
 }
 

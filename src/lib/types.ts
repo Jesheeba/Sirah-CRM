@@ -266,6 +266,64 @@ export interface Quotation {
   quotation_items?: QuotationItem[];
 }
 
+// ---- Invoices ---------------------------------------------------------------
+export type InvoiceStatus = "draft" | "sent" | "overdue" | "cancelled";
+export type PaymentStatus = "unpaid" | "partial" | "paid";
+
+export interface InvoiceItem {
+  id: string;
+  tenant_id: string;
+  invoice_id: string;
+  product_id: string | null;
+  name: string;
+  description: string | null;
+  quantity: number;
+  unit_price: number;
+  discount: number;
+  tax_rate: number;
+  line_total: number;
+  hsn_sac: string | null;
+  position: number;
+  created_at: string;
+}
+
+export interface Invoice {
+  id: string;
+  tenant_id: string;
+  invoice_number: number | null;
+  title: string;
+  status: InvoiceStatus;
+  payment_status: PaymentStatus;
+  quotation_id: string | null;
+  deal_id: string | null;
+  account_id: string | null;
+  contact_id: string | null;
+  currency: string;
+  invoice_date: string;
+  due_date: string | null;
+  discount_type: DiscountType;
+  discount_value: number;
+  subtotal: number;
+  discount_amount: number;
+  tax_amount: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  total: number;
+  paid_amount: number;
+  customer_gstin: string | null;
+  place_of_supply: string | null;
+  notes: string | null;
+  terms: string | null;
+  owner_id: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  accounts?: { name: string } | null;
+  deals?: { name: string } | null;
+  invoice_items?: InvoiceItem[];
+}
+
 // ---- Email / Communications (Phase 6) ---------------------------------------
 export type CommChannel = "email" | "whatsapp" | "sms";
 export type CommDirection = "outbound" | "inbound";
