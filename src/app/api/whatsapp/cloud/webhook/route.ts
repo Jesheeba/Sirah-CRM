@@ -71,15 +71,16 @@ export async function POST(req: NextRequest) {
     const admin = createAdminClient();
 
     // Resolve tenant by phone_id — app_secret verified globally above, not needed per-row.
-    const { data: setting, error: settingError } = await admin
+    const { data: settings } = await admin
       .from("integration_settings")
       .select("tenant_id")
       .eq("phone_id", phoneNumberId)
       .eq("channel", "whatsapp")
       .eq("is_enabled", true)
-      .maybeSingle();
+      .limit(1);
 
-    console.log("[wa-webhook] tenant lookup:", setting?.tenant_id ?? "NOT FOUND", "| db error:", settingError?.message ?? "none", "| phone_id len:", phoneNumberId.length);
+    const setting = settings?.[0] ?? null;
+    console.log("[wa-webhook] tenant lookup:", setting?.tenant_id ?? "NOT FOUND");
     if (!setting) {
       return NextResponse.json({ received: true });
     }
