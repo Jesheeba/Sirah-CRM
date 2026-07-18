@@ -89,7 +89,9 @@ export async function POST(req: NextRequest) {
     const value = parsed.entry?.[0]?.changes?.[0]?.value;
 
     // ── Inbound messages ──────────────────────────────────────────────────────
-    for (const msg of value?.messages ?? []) {
+    const messages = value?.messages ?? [];
+    console.log("[wa-webhook] messages count:", messages.length, "statuses count:", (value?.statuses ?? []).length);
+    for (const msg of messages) {
       if (!msg.id || !msg.from) continue;
 
       // Idempotency: Meta retries on non-200; skip if already in communications.
@@ -99,15 +101,12 @@ export async function POST(req: NextRequest) {
         .eq("provider_message_id", msg.id)
         .eq("tenant_id", tenantId);
 
-      if ((count ?? 0) > 0) continue;
+      if ((count ?? 0) > 0) { console.log("[wa-webhook] duplicate msg, skipping:", msg.id); continue; }
 
-      // Meta sends `from` as digits-only E.164 without '+' (e.g. "919876543210").
-      // normalizePhone strips any remaining non-digits for safety.
       const senderPhone = normalizePhone(msg.from);
       const body = msg.text?.body ?? msg.caption ?? "";
+      console.log("[wa-webhook] inserting inbound from:", senderPhone, "body:", body.slice(0, 40));
 
-      // Link to an existing lead or contact by normalised phone.
-      // Check both with and without '+' since the CRM may store either format.
       let relatedToType: string | null = null;
       let relatedToId: string | null = null;
 
@@ -136,9 +135,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // channel='whatsapp' is the medium the user sees; provider='whatsapp_cloud' is the transport.
-      // Do NOT change channel to 'whatsapp_cloud' — the inbox groups by channel.
-      await admin.from("communications").insert({
+      const { error: insertErr } = await admin.from("communications").insert({
         tenant_id: tenantId,
         channel: "whatsapp",
         provider: "whatsapp_cloud",
@@ -150,6 +147,7 @@ export async function POST(req: NextRequest) {
         related_to_type: relatedToType,
         related_to_id: relatedToId,
       });
+      console.log("[wa-webhook] insert result:", insertErr ? insertErr.message : "ok");
     }
 
     // ── Delivery / read status receipts ───────────────────────────────────────
