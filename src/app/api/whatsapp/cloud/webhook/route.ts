@@ -63,7 +63,6 @@ export async function POST(req: NextRequest) {
     // phone_number_id is how we route to the correct tenant.
     const phoneNumberId =
       parsed.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
-    console.log("[wa-webhook] phone_number_id:", phoneNumberId, "object:", parsed.object);
     if (!phoneNumberId) {
       return NextResponse.json({ received: true });
     }
@@ -80,7 +79,6 @@ export async function POST(req: NextRequest) {
       .limit(1);
 
     const setting = settings?.[0] ?? null;
-    console.log("[wa-webhook] tenant lookup:", setting?.tenant_id ?? "NOT FOUND");
     if (!setting) {
       return NextResponse.json({ received: true });
     }
@@ -89,9 +87,7 @@ export async function POST(req: NextRequest) {
     const value = parsed.entry?.[0]?.changes?.[0]?.value;
 
     // ── Inbound messages ──────────────────────────────────────────────────────
-    const messages = value?.messages ?? [];
-    console.log("[wa-webhook] messages count:", messages.length, "statuses count:", (value?.statuses ?? []).length);
-    for (const msg of messages) {
+    for (const msg of value?.messages ?? []) {
       if (!msg.id || !msg.from) continue;
 
       // Idempotency: Meta retries on non-200; skip if already in communications.
@@ -101,11 +97,10 @@ export async function POST(req: NextRequest) {
         .eq("provider_message_id", msg.id)
         .eq("tenant_id", tenantId);
 
-      if ((count ?? 0) > 0) { console.log("[wa-webhook] duplicate msg, skipping:", msg.id); continue; }
+      if ((count ?? 0) > 0) continue;
 
       const senderPhone = normalizePhone(msg.from);
       const body = msg.text?.body ?? msg.caption ?? "";
-      console.log("[wa-webhook] inserting inbound from:", senderPhone, "body:", body.slice(0, 40));
 
       let relatedToType: string | null = null;
       let relatedToId: string | null = null;
@@ -135,7 +130,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const { error: insertErr } = await admin.from("communications").insert({
+      await admin.from("communications").insert({
         tenant_id: tenantId,
         channel: "whatsapp",
         provider: "whatsapp_cloud",
@@ -147,7 +142,6 @@ export async function POST(req: NextRequest) {
         related_to_type: relatedToType,
         related_to_id: relatedToId,
       });
-      console.log("[wa-webhook] insert result:", insertErr ? insertErr.message : "ok");
     }
 
     // ── Delivery / read status receipts ───────────────────────────────────────
