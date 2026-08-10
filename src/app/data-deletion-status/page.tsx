@@ -6,23 +6,34 @@ export const metadata: Metadata = {
 };
 
 interface Props {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ code?: string; id?: string }>;
 }
 
+type PageStatus = "pending" | "processing" | "completed" | "failed" | "not_found" | "missing";
+
 export default async function DataDeletionStatusPage({ searchParams }: Props) {
-  const { id } = await searchParams;
+  // Accept the current `code` param; keep `id` working for any links already issued
+  // before this param was renamed to match Meta's documented response shape.
+  const params = await searchParams;
+  const code = params.code ?? params.id;
 
-  let status: "completed" | "not_found" | "missing" = "missing";
+  let status: PageStatus = "missing";
+  let completedAt: string | null = null;
 
-  if (id) {
+  if (code) {
     const admin = createAdminClient();
     const { data } = await admin
       .from("meta_deletion_requests")
       .select("status, completed_at")
-      .eq("code", id)
+      .eq("code", code)
       .maybeSingle();
 
-    status = data ? "completed" : "not_found";
+    if (!data) {
+      status = "not_found";
+    } else {
+      status = data.status as PageStatus;
+      completedAt = data.completed_at;
+    }
   }
 
   return (
@@ -44,7 +55,7 @@ export default async function DataDeletionStatusPage({ searchParams }: Props) {
         {status === "not_found" && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-6">
             <p className="text-red-800">
-              Confirmation code <code className="font-mono text-sm">{id}</code>{" "}
+              Confirmation code <code className="font-mono text-sm">{code}</code>{" "}
               was not found. If you believe this is an error, contact us at{" "}
               <a
                 href="mailto:sirahdigitalemp@gmail.com"
@@ -57,6 +68,34 @@ export default async function DataDeletionStatusPage({ searchParams }: Props) {
           </div>
         )}
 
+        {(status === "pending" || status === "processing") && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <p className="text-blue-800 font-semibold mb-2">
+              Deletion request received
+            </p>
+            <p className="text-blue-700 text-sm">
+              We're processing this request now. Confirmation code:{" "}
+              <code className="font-mono">{code}</code>
+            </p>
+          </div>
+        )}
+
+        {status === "failed" && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <p className="text-red-800 font-semibold mb-2">
+              We hit an issue processing this request
+            </p>
+            <p className="text-red-700 text-sm">
+              Confirmation code <code className="font-mono">{code}</code> is on
+              file and being followed up on. Contact{" "}
+              <a href="mailto:sirahdigitalemp@gmail.com" className="underline">
+                sirahdigitalemp@gmail.com
+              </a>{" "}
+              if you don't hear back soon.
+            </p>
+          </div>
+        )}
+
         {status === "completed" && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-6">
             <div className="text-green-600 text-4xl mb-3">✓</div>
@@ -65,8 +104,8 @@ export default async function DataDeletionStatusPage({ searchParams }: Props) {
             </p>
             <p className="text-green-700 text-sm">
               Your Facebook data associated with Sirah CRM has been deleted or
-              anonymised. Confirmation code:{" "}
-              <code className="font-mono">{id}</code>
+              anonymised{completedAt ? ` as of ${new Date(completedAt).toLocaleDateString()}` : ""}.
+              Confirmation code: <code className="font-mono">{code}</code>
             </p>
           </div>
         )}

@@ -1,78 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac, randomBytes } from "crypto";
+import { randomBytes } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { appBaseUrl } from "@/lib/meta";
+import { verifySignedRequest } from "@/lib/meta-data-deletion";
 
 export const runtime = "nodejs";
 
 /**
  * Meta Data Deletion Callback.
- * Required by Meta App Review — called when a Facebook user revokes the app's
- * permissions. Must verify the signed_request, delete/anonymize their data,
- * and respond with a confirmation URL + code.
+ * Called when a Facebook user revokes the app's permissions. Verifies the signed_request,
+ * enqueues the deletion (processed async by the workflow cron tick — see
+ * src/lib/meta-data-deletion.ts), and responds with a confirmation URL + code within a
+ * few seconds, per Meta's requirement.
  *
  * Docs: https://developers.facebook.com/docs/development/create-an-app/app-dashboard/data-deletion-callback
  */
-
-function base64urlDecode(str: string): string {
-  // Normalise base64url → standard base64, then decode
-  const padded = str + "==".slice(0, (4 - (str.length % 4)) % 4);
-  return Buffer.from(padded.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
-}
-
-function base64urlEncode(buf: Buffer): string {
-  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-
-interface DeletionPayload {
-  algorithm?: string;
-  user_id?: string;
-  issued_at?: number;
-  expires?: number;
-}
-
-function verifySignedRequest(
-  signedRequest: string,
-  appSecret: string,
-): DeletionPayload | null {
-  const dot = signedRequest.indexOf(".");
-  if (dot === -1) return null;
-
-  const encodedSig = signedRequest.slice(0, dot);
-  const payload = signedRequest.slice(dot + 1);
-
-  // Recompute expected signature
-  const expected = base64urlEncode(
-    createHmac("sha256", appSecret).update(payload).digest(),
-  );
-
-  if (encodedSig !== expected) return null;
-
-  try {
-    return JSON.parse(base64urlDecode(payload)) as DeletionPayload;
-  } catch {
-    return null;
-  }
-}
-
 export async function POST(req: NextRequest) {
-  const appSecret = process.env.META_APP_SECRET ?? "";
-  if (!appSecret) {
-    return NextResponse.json({ error: "server_misconfigured" }, { status: 500 });
-  }
-
-  // Meta sends signed_request as form-encoded body
   let signedRequest: string | null = null;
   const contentType = req.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/x-www-form-urlencoded")) {
     const text = await req.text();
-    const params = new URLSearchParams(text);
-    signedRequest = params.get("signed_request");
+    signedRequest = new URLSearchParams(text).get("signed_request");
   } else {
-    // Fallback: try JSON body (some integrations wrap it)
+    // Fallback: some integrations wrap it as JSON.
     try {
-      const json = await req.json() as { signed_request?: string };
+      const json = (await req.json()) as { signed_request?: string };
       signedRequest = json.signed_request ?? null;
     } catch {
       signedRequest = null;
@@ -83,48 +36,61 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "missing_signed_request" }, { status: 400 });
   }
 
-  const payload = verifySignedRequest(signedRequest, appSecret);
-  if (!payload) {
+  if (!process.env.META_APP_SECRET && !process.env.FB_APP_SECRET) {
+    console.error("[Meta Data Deletion] neither META_APP_SECRET nor FB_APP_SECRET is set.");
+  }
+
+  const verified = verifySignedRequest(signedRequest);
+  if (!verified) {
     return NextResponse.json({ error: "invalid_signature" }, { status: 400 });
   }
 
-  const facebookUid = payload.user_id;
-  if (!facebookUid) {
-    return NextResponse.json({ error: "missing_user_id" }, { status: 400 });
-  }
+  const { payload, matchedSecret } = verified;
+  const facebookUid = payload.user_id as string; // verifySignedRequest already rejects a missing user_id
+  const issuedAt = payload.issued_at ? new Date(payload.issued_at * 1000).toISOString() : null;
 
-  // Generate a unique confirmation code
-  const code = randomBytes(12).toString("hex");
+  console.log(`[Meta Data Deletion] verified via ${matchedSecret} for user_id=${facebookUid}`);
 
   const admin = createAdminClient();
 
-  // 1. Anonymize Page access tokens for any Pages connected by this Facebook user.
-  //    connected_by stores the Supabase user id, but we can't easily map Facebook
-  //    uid → Supabase uid without storing the mapping. We log the request and
-  //    perform best-effort cleanup based on available identifiers.
-  await admin
-    .from("meta_lead_events")
-    .update({ status: "deleted" })
-    .eq("status", "received")
-    // No facebook_uid column exists on this table — this is a no-op guard.
-    // Full uid-based deletion requires adding a facebook_uid column in a future migration.
-    .eq("leadgen_id", "___noop___");
+  // Replay detection: Meta retries the identical signed_request (same facebook_uid +
+  // issued_at) if it doesn't get a fast 200. Return the existing confirmation instead of
+  // creating a duplicate pending request / reprocessing the deletion.
+  if (issuedAt) {
+    const { data: existing } = await admin
+      .from("meta_deletion_requests")
+      .select("code")
+      .eq("facebook_uid", facebookUid)
+      .eq("issued_at", issuedAt)
+      .maybeSingle();
 
-  // 2. Record the deletion request for the public status page.
-  await admin.from("meta_deletion_requests").upsert(
-    {
-      facebook_uid: facebookUid,
-      code,
-      status: "completed",
-      requested_at: new Date().toISOString(),
-      completed_at: new Date().toISOString(),
-    },
-    { onConflict: "code" },
-  );
+    if (existing) {
+      return NextResponse.json({
+        url: `${appBaseUrl()}/data-deletion-status?code=${existing.code}`,
+        confirmation_code: existing.code,
+      });
+    }
+  }
 
-  const base = appBaseUrl();
+  const code = randomBytes(16).toString("hex");
+
+  const { error: insErr } = await admin.from("meta_deletion_requests").insert({
+    facebook_uid: facebookUid,
+    code,
+    status: "pending",
+    issued_at: issuedAt,
+    requested_at: new Date().toISOString(),
+  });
+
+  if (insErr) {
+    console.error("[Meta Data Deletion] failed to record request:", insErr.message);
+    return NextResponse.json({ error: "server_error" }, { status: 500 });
+  }
+
+  // Deletion itself is NOT done here — the workflow cron tick picks up 'pending' rows
+  // (processMetaDeletionRequests in lib/meta-data-deletion.ts) so this responds fast.
   return NextResponse.json({
-    url: `${base}/data-deletion-status?id=${code}`,
+    url: `${appBaseUrl()}/data-deletion-status?code=${code}`,
     confirmation_code: code,
   });
 }

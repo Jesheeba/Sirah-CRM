@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   appBaseUrl,
   exchangeCodeForUserToken,
+  fetchMetaUserId,
   getLongLivedUserToken,
   listPages,
   subscribePageToLeadgen,
@@ -44,6 +45,11 @@ export async function GET(req: NextRequest) {
     const pages = await listPages(userToken);
     if (!pages.length) return redirectBack("meta=error&reason=nopages");
 
+    // Best-effort — same Facebook user owns every page from this OAuth grant, so
+    // resolve it once. Used only to map a future Meta data-deletion request back to
+    // these connections; a null here never blocks connecting the pages.
+    const fbUserId = await fetchMetaUserId(userToken);
+
     const admin = createAdminClient();
     let connected = 0;
     for (const page of pages) {
@@ -62,6 +68,7 @@ export async function GET(req: NextRequest) {
           is_enabled: true,
           subscribed,
           connected_by: ctx.userId,
+          fb_user_id: fbUserId,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "page_id" },

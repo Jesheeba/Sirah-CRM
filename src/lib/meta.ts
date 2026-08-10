@@ -96,6 +96,20 @@ export interface MetaPage {
   access_token: string;
 }
 
+/** Resolve the Facebook app-scoped user id for an access token — captured at connection
+ *  time (both Lead Ads OAuth and WhatsApp Embedded Signup) so a later Meta data-deletion
+ *  callback (which only identifies the user by this id) can be mapped back to what they
+ *  connected. Best-effort: returns null on failure rather than failing the whole connect,
+ *  matching the non-fatal pattern used for the other post-token Graph calls in this flow. */
+export async function fetchMetaUserId(accessToken: string): Promise<string | null> {
+  try {
+    const json = await graphFetch("me", { access_token: accessToken, fields: "id" });
+    return typeof json.id === "string" ? json.id : null;
+  } catch {
+    return null;
+  }
+}
+
 /** List the Pages the user manages, each with its own (long-lived) Page token. */
 export async function listPages(userToken: string): Promise<MetaPage[]> {
   const json = await graphFetch("me/accounts", {
