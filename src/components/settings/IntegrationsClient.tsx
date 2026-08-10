@@ -239,7 +239,7 @@ function WhatsAppCloudCard({
     window.fbAsyncInit = () => {
       window.FB!.init({
         appId: process.env.NEXT_PUBLIC_FB_APP_ID ?? "",
-        version: "v22.0",
+        version: "v25.0",
         xfbml: false,
         cookie: true,
       });
@@ -256,18 +256,20 @@ function WhatsAppCloudCard({
     function onMessage(event: MessageEvent) {
       // Log ALL messages so we can see what origin Facebook actually uses.
       console.log("[WA Signup] message origin:", event.origin, "data:", event.data);
-      if (
-        event.origin !== "https://www.facebook.com" &&
-        event.origin !== "https://web.facebook.com"
-      )
-        return;
+      // Matches Meta's documented check (any facebook.com subdomain), not just the two
+      // origins previously hardcoded — those were narrower than what Meta actually uses.
+      if (!event.origin.endsWith("facebook.com")) return;
       try {
         const data = JSON.parse(event.data as string) as {
           type?: string;
           event?: string;
           data?: { waba_id?: string; phone_number_id?: string };
         };
-        console.log("[WA Signup] parsed:", data.type, data.event, data.data);
+        // TEMPORARY: keep this until we've confirmed WA_EMBEDDED_SIGNUP actually fires
+        // with the fixed extras/version/origin-check — full payload shape, not just a
+        // summary, so waba_id/phone_number_id presence (or absence) is visible.
+        console.log("[WA Signup] parsed event (full payload):", data);
+        console.log("[WA Signup] waba_id:", data.data?.waba_id, "phone_number_id:", data.data?.phone_number_id);
         if (
           data.type === "WA_EMBEDDED_SIGNUP" &&
           (data.event === "FINISH" || data.event === "FINISH_ONLY_WABA")
@@ -339,7 +341,11 @@ function WhatsAppCloudCard({
         config_id: configId,
         response_type: "code",
         override_default_response_type: true,
-        extras: { setup: {}, featureType: "", sessionInfoVersion: 3 },
+        // Matches Meta's documented base Cloud API WABA flow exactly. featureType +
+        // sessionInfoVersion previously set here belong to a different, unrelated
+        // onboarding path (WhatsApp Business App onboarding) and were never valid for
+        // this flow — featureType: "" isn't a documented value for any flow.
+        extras: { setup: {} },
       },
     );
   }
