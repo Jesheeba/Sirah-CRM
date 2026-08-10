@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Member } from "@/components/tasks/TasksClient";
 import {
@@ -10,7 +10,17 @@ import {
   toCsv,
   type ReportColumn,
 } from "@/lib/reports";
-import type { ReportType, SavedReport } from "@/lib/types";
+import { createReportSchedule, deleteReportSchedule, toggleReportSchedule } from "@/app/(app)/reports/schedule-actions";
+import type { ReportCadence, ReportDateRange, ReportSchedule, ReportType, SavedReport } from "@/lib/types";
+
+const DATE_RANGE_LABEL: Record<ReportDateRange, string> = {
+  last_7_days: "Last 7 days",
+  last_30_days: "Last 30 days",
+  this_month: "This month",
+  last_month: "Last month",
+  all_time: "All time",
+};
+const CADENCE_LABEL: Record<ReportCadence, string> = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
 
 function memberName(m: Member | undefined) {
   if (!m) return "—";
@@ -47,13 +57,17 @@ type RunArgs = {
 export default function ReportsClient({
   members,
   savedReports,
+  schedules: initialSchedules,
   userId,
   canSeeAll,
+  canSchedule,
 }: {
   members: Member[];
   savedReports: SavedReport[];
+  schedules: ReportSchedule[];
   userId: string;
   canSeeAll: boolean;
+  canSchedule: boolean;
 }) {
   const supabase = createClient();
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
@@ -68,6 +82,13 @@ export default function ReportsClient({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedReport[]>(savedReports);
   const [saveName, setSaveName] = useState("");
+  const [schedules, setSchedules] = useState<ReportSchedule[]>(initialSchedules);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleName, setScheduleName] = useState("");
+  const [scheduleRange, setScheduleRange] = useState<ReportDateRange>("last_7_days");
+  const [scheduleCadence, setScheduleCadence] = useState<ReportCadence>("weekly");
+  const [scheduleEmails, setScheduleEmails] = useState("");
+  const [schedulePending, startScheduleTransition] = useTransition();
 
   const def = REPORT_DEFS[type];
 
@@ -118,6 +139,11 @@ export default function ReportsClient({
     setError(null);
   }
 
+  function openPdfView() {
+    const qs = new URLSearchParams({ type, from, to, filters: JSON.stringify(filters) });
+    window.open(`/reports/print?${qs.toString()}`, "_blank");
+  }
+
   function exportCsv() {
     const headers = def.columns.map((c) => c.label);
     const data = rows.map((r) => def.columns.map((c) => cellText(c, r)));
@@ -163,10 +189,46 @@ export default function ReportsClient({
     }
   }
 
+  function handleCreateSchedule() {
+    const emails = scheduleEmails.split(/[,\s]+/).map((e) => e.trim()).filter(Boolean);
+    startScheduleTransition(async () => {
+      const res = await createReportSchedule({
+        name: scheduleName.trim() || `${def.label} — ${CADENCE_LABEL[scheduleCadence]}`,
+        report_type: type,
+        filters,
+        date_range: scheduleRange,
+        cadence: scheduleCadence,
+        recipient_emails: emails,
+      });
+      if (!res.ok || !res.schedule) return setError(res.error ?? "Failed");
+      setSchedules((s) => [res.schedule!, ...s]);
+      setScheduleName("");
+      setScheduleEmails("");
+      setShowSchedule(false);
+      setError(null);
+    });
+  }
+
+  function handleToggleSchedule(id: string, active: boolean) {
+    startScheduleTransition(async () => {
+      const res = await toggleReportSchedule(id, active);
+      if (res.ok) setSchedules((s) => s.map((x) => (x.id === id ? { ...x, is_active: active } : x)));
+    });
+  }
+
+  function handleDeleteSchedule(id: string) {
+    if (!confirm("Delete this scheduled report?")) return;
+    startScheduleTransition(async () => {
+      const res = await deleteReportSchedule(id);
+      if (res.ok) setSchedules((s) => s.filter((x) => x.id !== id));
+    });
+  }
+
   const total = def.sumField
     ? rows.reduce((sum, r) => sum + Number(r[def.sumField!] ?? 0), 0)
     : null;
   const savedForType = saved.filter((r) => r.report_type === type);
+  const schedulesForType = schedules.filter((s) => s.report_type === type);
 
   return (
     <div className="space-y-4">
@@ -274,6 +336,23 @@ export default function ReportsClient({
             >
               Save report
             </button>
+            {canSchedule && (
+              <button
+                onClick={() => setShowSchedule((s) => !s)}
+                className={`rounded-lg border px-3 py-1.5 text-sm ${
+                  showSchedule ? "border-brand bg-brand-50 text-brand" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Schedule email…
+              </button>
+            )}
+            <button
+              onClick={openPdfView}
+              disabled={rows.length === 0}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Open PDF view
+            </button>
             <button
               onClick={exportCsv}
               disabled={rows.length === 0}
@@ -328,6 +407,89 @@ export default function ReportsClient({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Schedule form */}
+      {showSchedule && canSchedule && (
+        <div className="space-y-3 rounded-xl border border-brand/30 bg-brand/5 p-4">
+          <h2 className="text-sm font-semibold text-slate-700">Email this {def.label} report on a schedule</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <input
+              placeholder="Schedule name"
+              value={scheduleName}
+              onChange={(e) => setScheduleName(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+            />
+            <select
+              value={scheduleRange}
+              onChange={(e) => setScheduleRange(e.target.value as ReportDateRange)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+            >
+              {(Object.keys(DATE_RANGE_LABEL) as ReportDateRange[]).map((r) => (
+                <option key={r} value={r}>{DATE_RANGE_LABEL[r]}</option>
+              ))}
+            </select>
+            <select
+              value={scheduleCadence}
+              onChange={(e) => setScheduleCadence(e.target.value as ReportCadence)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+            >
+              {(Object.keys(CADENCE_LABEL) as ReportCadence[]).map((c) => (
+                <option key={c} value={c}>{CADENCE_LABEL[c]}</option>
+              ))}
+            </select>
+            <input
+              placeholder="Recipient emails, comma-separated"
+              value={scheduleEmails}
+              onChange={(e) => setScheduleEmails(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+            />
+          </div>
+          <p className="text-xs text-slate-400">
+            Applies the current filters (not the date-from/to above — the schedule re-anchors its
+            own range every time it runs). Sends a CSV attachment, checked daily.
+          </p>
+          <button
+            onClick={handleCreateSchedule}
+            disabled={schedulePending}
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {schedulePending ? "Creating…" : "Create schedule"}
+          </button>
+        </div>
+      )}
+
+      {/* Existing schedules for this type */}
+      {schedulesForType.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">Scheduled {def.label} emails</h2>
+          <ul className="divide-y divide-slate-100">
+            {schedulesForType.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <div>
+                  <span className="font-medium text-slate-700">{s.name}</span>{" "}
+                  <span className="text-xs text-slate-400">
+                    {CADENCE_LABEL[s.cadence]} · {DATE_RANGE_LABEL[s.date_range]} · {s.recipient_emails.join(", ")}
+                    {s.last_sent_at && ` · last sent ${new Date(s.last_sent_at).toLocaleDateString()}`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {canSchedule && (
+                    <button onClick={() => handleToggleSchedule(s.id, !s.is_active)} className="text-xs text-slate-500 hover:text-slate-700">
+                      {s.is_active ? "Pause" : "Resume"}
+                    </button>
+                  )}
+                  {canSchedule && (
+                    <button onClick={() => handleDeleteSchedule(s.id)} className="text-xs text-slate-400 hover:text-red-600">
+                      Delete
+                    </button>
+                  )}
+                  {!s.is_active && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Paused</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

@@ -3,11 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { getUserContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchMetaUserId } from "@/lib/meta";
 
 export interface ConnectWhatsAppInput {
   code: string;
   waba_id: string;
-  phone_number_id: string;
+  phone_number_id?: string;
 }
 
 export interface ConnectWhatsAppResult {
@@ -62,6 +63,35 @@ export async function connectWhatsAppEmbedded(
 
   const accessToken = tokenJson.access_token;
 
+  // Best-effort — used only to map a future Meta data-deletion request back to this
+  // connection; a null here never blocks connecting WhatsApp.
+  const fbUserId = await fetchMetaUserId(accessToken);
+
+  // ── Step 1b: Resolve the phone number ID if the popup didn't deliver one ──
+  // Meta's postMessage occasionally fires WA_EMBEDDED_SIGNUP FINISH with only
+  // waba_id (e.g. when the number needed OTP verification mid-popup). Fall
+  // back to looking it up directly rather than failing the whole connect.
+  let phoneNumberId = input.phone_number_id;
+  if (!phoneNumberId) {
+    const phonesUrl = `https://graph.facebook.com/v22.0/${input.waba_id}/phone_numbers`;
+    const phonesRes = await fetch(phonesUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const phonesJson = (await phonesRes.json().catch(() => ({}))) as {
+      data?: Array<{ id: string }>;
+      error?: { message?: string };
+    };
+    phoneNumberId = phonesJson.data?.[0]?.id;
+    if (!phoneNumberId) {
+      return {
+        ok: false,
+        error:
+          phonesJson.error?.message ??
+          "WhatsApp Business Account connected, but no phone number was found on it. Add a number in the signup flow and try again.",
+      };
+    }
+  }
+
   // ── Step 2: Subscribe the WABA to this app's webhook (non-fatal) ──────────
   try {
     await fetch(`https://graph.facebook.com/v22.0/${input.waba_id}/subscribed_apps`, {
@@ -76,7 +106,7 @@ export async function connectWhatsAppEmbedded(
   // For Embedded Signup the phone may already be registered; errors are non-fatal.
   try {
     const pin = String(Math.floor(100000 + Math.random() * 900000));
-    await fetch(`https://graph.facebook.com/v22.0/${input.phone_number_id}/register`, {
+    await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/register`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -95,11 +125,12 @@ export async function connectWhatsAppEmbedded(
       tenant_id: ctx.tenantId,
       channel: "whatsapp",
       is_enabled: true,
-      phone_id: input.phone_number_id,
+      phone_id: phoneNumberId,
       business_account_id: input.waba_id,
       access_token: accessToken,
       secret_set: true,
       secret_last4: accessToken.slice(-4),
+      fb_user_id: fbUserId,
     },
     { onConflict: "tenant_id,channel" },
   );

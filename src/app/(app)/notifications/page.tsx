@@ -18,8 +18,9 @@ export default async function NotificationsPage() {
     supabase.from("notification_preferences").select("*"),
   ]);
 
-  const prefs: Record<string, boolean> = {};
-  for (const p of (prefRes.data ?? []) as NotificationPreference[]) prefs[p.type] = p.in_app;
+  const prefs: Record<string, { in_app: boolean; email: boolean }> = {};
+  for (const p of (prefRes.data ?? []) as NotificationPreference[])
+    prefs[p.type] = { in_app: p.in_app, email: p.email };
 
   return (
     <NotificationsClient

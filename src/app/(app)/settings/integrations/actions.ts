@@ -182,3 +182,77 @@ export async function saveWhatsAppCloudConfig(
 export async function stubSendSms(): Promise<SaveResult> {
   return { ok: false, error: "SMS is not configured yet." };
 }
+
+export interface SaveRazorpayInput {
+  is_enabled: boolean;
+  razorpay_key_id?: string | null;
+  // Secrets — only written when non-blank; blank/undefined leaves stored value untouched.
+  key_secret?: string | null;
+  webhook_secret?: string | null;
+}
+
+/**
+ * Saves a tenant's own Razorpay credentials (Payment Links API). Separate from
+ * saveIntegration() because Razorpay needs two secret columns (key_secret, reusing
+ * access_token, + webhook_secret) instead of one. Admin-gated, service role.
+ */
+export async function saveRazorpayConfig(input: SaveRazorpayInput): Promise<SaveResult> {
+  const ctx = await getUserContext();
+  if (!ctx) return { ok: false, error: "Not authenticated." };
+  if (!ctx.isAdmin) return { ok: false, error: "Only admins can change integrations." };
+  if (!ctx.tenantId) return { ok: false, error: "No organization found." };
+
+  const admin = createAdminClient();
+
+  const row: Record<string, unknown> = {
+    tenant_id: ctx.tenantId,
+    channel: "razorpay",
+    is_enabled: input.is_enabled,
+    razorpay_key_id: input.razorpay_key_id?.trim() || null,
+  };
+
+  const keySecret = input.key_secret?.trim();
+  if (keySecret) {
+    row.access_token = keySecret;
+    row.secret_set = true;
+    row.secret_last4 = keySecret.slice(-4);
+  }
+
+  const webhookSecret = input.webhook_secret?.trim();
+  if (webhookSecret) {
+    row.webhook_secret = webhookSecret;
+  }
+
+  const { error } = await admin
+    .from("integration_settings")
+    .upsert(row, { onConflict: "tenant_id,channel" });
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/settings/integrations");
+  return { ok: true };
+}
+
+/**
+ * Returns the tenant-specific Razorpay webhook URL (routes on webhook_token, same
+ * column already used for the whatsapp_device webhook). Only meaningful once the
+ * tenant has saved their own Razorpay config at least once (webhook_token is assigned
+ * by the column default on first insert).
+ */
+export async function getRazorpayWebhookUrl(): Promise<string | null> {
+  const ctx = await getUserContext();
+  if (!ctx?.isAdmin || !ctx.tenantId) return null;
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("integration_settings")
+    .select("webhook_token")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("channel", "razorpay")
+    .maybeSingle();
+
+  if (!data?.webhook_token) return null;
+
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+  return `${base}/api/payments/razorpay/webhook/${data.webhook_token}`;
+}

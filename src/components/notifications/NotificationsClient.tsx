@@ -5,19 +5,21 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { NOTIFICATION_TYPE_META, type Notification } from "@/lib/types";
 
+type ChannelPrefs = { in_app: boolean; email: boolean };
+
 export default function NotificationsClient({
   initial,
   initialPrefs,
   userId,
 }: {
   initial: Notification[];
-  initialPrefs: Record<string, boolean>;
+  initialPrefs: Record<string, ChannelPrefs>;
   userId: string;
 }) {
   const supabase = createClient();
   const router = useRouter();
   const [items, setItems] = useState<Notification[]>(initial);
-  const [prefs, setPrefs] = useState<Record<string, boolean>>(initialPrefs);
+  const [prefs, setPrefs] = useState<Record<string, ChannelPrefs>>(initialPrefs);
   const [tab, setTab] = useState<"all" | "unread">("all");
   const [showPrefs, setShowPrefs] = useState(false);
 
@@ -42,15 +44,19 @@ export default function NotificationsClient({
     await supabase.from("notifications").update({ is_read: true }).in("id", ids);
   }
 
-  // Preference toggles default to enabled when there's no stored row.
-  const isEnabled = (type: string) => prefs[type] ?? true;
-  async function togglePref(type: string) {
-    const next = !isEnabled(type);
+  // In-app defaults to enabled with no stored row (matches fn_should_notify's DB default);
+  // email defaults to OFF (opt-in — matches the notification_preferences.email column default).
+  const channelEnabled = (type: string, channel: keyof ChannelPrefs) =>
+    prefs[type]?.[channel] ?? (channel === "in_app");
+
+  async function toggleChannel(type: string, channel: keyof ChannelPrefs) {
+    const current = prefs[type] ?? { in_app: true, email: false };
+    const next = { ...current, [channel]: !current[channel] };
     setPrefs((p) => ({ ...p, [type]: next }));
     const { error } = await supabase
       .from("notification_preferences")
-      .upsert({ user_id: userId, type, in_app: next }, { onConflict: "user_id,type" });
-    if (error) setPrefs((p) => ({ ...p, [type]: !next })); // revert on failure
+      .upsert({ user_id: userId, type, in_app: next.in_app, email: next.email }, { onConflict: "user_id,type" });
+    if (error) setPrefs((p) => ({ ...p, [type]: current })); // revert on failure
   }
 
   return (
@@ -75,30 +81,45 @@ export default function NotificationsClient({
       </div>
 
       {showPrefs && (
-        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
-          <h2 className="text-sm font-semibold text-slate-700">In-app notifications</h2>
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">Notification preferences</h2>
+            <div className="flex gap-6 pr-[3.25rem] text-xs font-medium uppercase tracking-wide text-slate-400">
+              <span>In-app</span>
+              <span>Email</span>
+            </div>
+          </div>
           {NOTIFICATION_TYPE_META.map((m) => (
-            <label key={m.type} className="flex items-center justify-between gap-3 border-b border-slate-50 py-2 last:border-0">
+            <div key={m.type} className="flex items-center justify-between gap-3 border-b border-slate-50 py-2 last:border-0">
               <span>
                 <span className="block text-sm text-slate-700">{m.label}</span>
                 <span className="block text-xs text-slate-400">{m.description}</span>
               </span>
-              <button
-                onClick={() => togglePref(m.type)}
-                role="switch"
-                aria-checked={isEnabled(m.type)}
-                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                  isEnabled(m.type) ? "bg-brand" : "bg-slate-300"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                    isEnabled(m.type) ? "translate-x-5" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
-            </label>
+              <div className="flex shrink-0 gap-6">
+                {(["in_app", "email"] as const).map((channel) => (
+                  <button
+                    key={channel}
+                    onClick={() => toggleChannel(m.type, channel)}
+                    role="switch"
+                    aria-label={`${channel === "in_app" ? "In-app" : "Email"} notifications for ${m.label}`}
+                    aria-checked={channelEnabled(m.type, channel)}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                      channelEnabled(m.type, channel) ? "bg-brand" : "bg-slate-300"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                        channelEnabled(m.type, channel) ? "translate-x-5" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
+          <p className="text-xs text-slate-400">
+            Email notifications are sent as a daily digest, not instantly.
+          </p>
         </div>
       )}
 

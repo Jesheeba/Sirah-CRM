@@ -47,20 +47,23 @@ function StageRow({
   const [prob, setProb] = useState(stage.probability);
   const [isWon, setIsWon] = useState(stage.is_won);
   const [isLost, setIsLost] = useState(stage.is_lost);
+  const [rottenDays, setRottenDays] = useState<string>(stage.rotten_after_days?.toString() ?? "");
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function save() {
     if (!name.trim()) return;
+    const rotten = rottenDays.trim() ? Math.max(1, Number(rottenDays)) : null;
     startTransition(async () => {
       const res = await updateStage(stage.id, {
         name: name.trim(),
         probability: prob,
         is_won: isWon,
         is_lost: isLost,
+        rotten_after_days: rotten,
       });
       if (!res.ok) { setErr(res.error ?? "Failed"); return; }
-      onUpdate({ ...stage, name: name.trim(), probability: prob, is_won: isWon, is_lost: isLost });
+      onUpdate({ ...stage, name: name.trim(), probability: prob, is_won: isWon, is_lost: isLost, rotten_after_days: rotten });
       setEditing(false);
       setErr(null);
     });
@@ -71,6 +74,7 @@ function StageRow({
     setProb(stage.probability);
     setIsWon(stage.is_won);
     setIsLost(stage.is_lost);
+    setRottenDays(stage.rotten_after_days?.toString() ?? "");
     setEditing(false);
     setErr(null);
   }
@@ -156,6 +160,20 @@ function StageRow({
             Lost stage
           </label>
         </div>
+        {!isWon && !isLost && (
+          <label className="flex items-center gap-1.5 text-sm text-slate-600">
+            Flag as rotten after
+            <input
+              type="number"
+              min={1}
+              value={rottenDays}
+              onChange={(e) => setRottenDays(e.target.value)}
+              placeholder="off"
+              className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-sm outline-none focus:border-brand"
+            />
+            days idle
+          </label>
+        )}
         <div className="flex gap-2">
           <button
             onClick={save}
@@ -199,6 +217,15 @@ function StageRow({
       <span className="flex-1 text-sm text-slate-800">{stage.name}</span>
 
       <span className="text-xs text-slate-400">{stage.probability}%</span>
+
+      {stage.rotten_after_days != null && (
+        <span
+          className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+          title={`Deals sitting here longer than ${stage.rotten_after_days} days are flagged stale`}
+        >
+          Stale &gt;{stage.rotten_after_days}d
+        </span>
+      )}
 
       {(stage.is_won || stage.is_lost) && (
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tagStyle}`}>
@@ -251,6 +278,7 @@ function PipelineCard({
   const [newStageProb, setNewStageProb] = useState(50);
   const [newIsWon, setNewIsWon] = useState(false);
   const [newIsLost, setNewIsLost] = useState(false);
+  const [newRottenDays, setNewRottenDays] = useState("");
   const [pending, startTransition] = useTransition();
 
   const pipeStages = stagesFor(stages, pipeline.id);
@@ -291,6 +319,7 @@ function PipelineCard({
         probability: newStageProb,
         is_won: newIsWon,
         is_lost: newIsLost,
+        rotten_after_days: newRottenDays.trim() ? Math.max(1, Number(newRottenDays)) : null,
       });
       if (!res.ok) { setErr(res.error ?? "Failed"); return; }
       if (res.stage) onStagesChange([...stages, res.stage]);
@@ -298,6 +327,7 @@ function PipelineCard({
       setNewStageProb(50);
       setNewIsWon(false);
       setNewIsLost(false);
+      setNewRottenDays("");
       setAddingStage(false);
       setErr(null);
     });
@@ -458,6 +488,20 @@ function PipelineCard({
                   Lost stage
                 </label>
               </div>
+              {!newIsWon && !newIsLost && (
+                <label className="flex items-center gap-1.5 text-sm text-slate-600">
+                  Flag as rotten after
+                  <input
+                    type="number"
+                    min={1}
+                    value={newRottenDays}
+                    onChange={(e) => setNewRottenDays(e.target.value)}
+                    placeholder="off"
+                    className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-sm outline-none focus:border-brand"
+                  />
+                  days idle
+                </label>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={handleAddStage}

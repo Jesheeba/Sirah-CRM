@@ -4,8 +4,16 @@ import { createClient } from "@/lib/supabase/server";
 import EditableFields from "@/components/record/EditableFields";
 import RecordTimeline from "@/components/record/RecordTimeline";
 import LeadConvert from "@/components/leads/LeadConvert";
+import SequenceEnrollCard from "@/components/leads/SequenceEnrollCard";
+import AuditHistory from "@/components/record/AuditHistory";
 import { customFieldDefsFor } from "@/lib/customFields";
-import { LEAD_STATUSES, type TimelineItem } from "@/lib/types";
+import { ACTIVITY_SELECT, activityToTimelineItem } from "@/lib/timeline";
+import { LEAD_SCORING_ACTIONS } from "@/lib/lead-scoring";
+import { LEAD_STATUSES, type SequenceEnrollment, type TimelineItem } from "@/lib/types";
+
+function fmtWhen(at: string) {
+  try { return new Date(at).toLocaleString(); } catch { return at; }
+}
 
 function RelatedCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -43,7 +51,7 @@ export default async function LeadDetail({
     .maybeSingle();
   if (!lead) notFound();
 
-  const [notesRes, actsRes, tasksRes] = await Promise.all([
+  const [notesRes, actsRes, tasksRes, sequencesRes, enrollmentsRes] = await Promise.all([
     supabase
       .from("notes")
       .select("id, body, created_at")
@@ -51,7 +59,7 @@ export default async function LeadDetail({
       .eq("related_to_id", id),
     supabase
       .from("activities")
-      .select("id, subject, type, occurred_at")
+      .select(ACTIVITY_SELECT)
       .eq("related_to_type", "lead")
       .eq("related_to_id", id),
     supabase
@@ -60,15 +68,24 @@ export default async function LeadDetail({
       .eq("related_to_type", "lead")
       .eq("related_to_id", id)
       .is("deleted_at", null),
+    supabase.from("sequences").select("id, name").eq("is_active", true).is("deleted_at", null),
+    supabase.from("sequence_enrollments").select("*, sequences(name)").eq("lead_id", id).order("enrolled_at", { ascending: false }),
   ]);
+
+  const { data: scoreEventsData } = await supabase
+    .from("lead_score_events")
+    .select("id, action, points, created_at")
+    .eq("lead_id", id)
+    .order("created_at", { ascending: false })
+    .limit(10);
+  const scoreEvents = (scoreEventsData ?? []) as { id: string; action: string; points: number; created_at: string }[];
+  const actionLabel = (a: string) => LEAD_SCORING_ACTIONS.find((m) => m.action === a)?.label ?? a;
 
   const items: TimelineItem[] = [
     ...((notesRes.data ?? []) as any[]).map((n) => ({
       id: n.id, kind: "note" as const, text: n.body, at: n.created_at,
     })),
-    ...((actsRes.data ?? []) as any[]).map((a) => ({
-      id: a.id, kind: "activity" as const, text: a.subject ?? a.type, meta: a.type, at: a.occurred_at,
-    })),
+    ...((actsRes.data ?? []) as any[]).map(activityToTimelineItem),
     ...((tasksRes.data ?? []) as any[]).map((t) => ({
       id: t.id, kind: "task" as const, text: t.title, meta: t.status, at: t.created_at,
     })),
@@ -122,6 +139,12 @@ export default async function LeadDetail({
         <div className="space-y-4">
           <LeadConvert leadId={lead.id} convertedDealId={lead.converted_deal_id} />
 
+          <SequenceEnrollCard
+            leadId={lead.id}
+            availableSequences={(sequencesRes.data ?? []) as { id: string; name: string }[]}
+            enrollments={(enrollmentsRes.data ?? []) as SequenceEnrollment[]}
+          />
+
           <RelatedCard title="Facts">
             <div className="px-2 py-1 text-sm text-slate-600">
               Source: <span className="font-medium text-slate-800">{lead.source || "—"}</span>
@@ -130,6 +153,24 @@ export default async function LeadDetail({
               Score: <span className="font-medium text-slate-800">{lead.score}</span>
             </div>
           </RelatedCard>
+
+          {scoreEvents.length > 0 && (
+            <RelatedCard title="Score history">
+              {scoreEvents.map((e) => (
+                <div key={e.id} className="flex items-center justify-between gap-2 px-2 py-1 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate text-slate-700">{actionLabel(e.action)}</p>
+                    <p className="text-xs text-slate-400">{fmtWhen(e.created_at)}</p>
+                  </div>
+                  <span className={`shrink-0 font-semibold ${e.points >= 0 ? "text-green-600" : "text-rose-600"}`}>
+                    {e.points >= 0 ? `+${e.points}` : e.points}
+                  </span>
+                </div>
+              ))}
+            </RelatedCard>
+          )}
+
+          <AuditHistory entityType="leads" entityId={lead.id} />
         </div>
       </div>
 

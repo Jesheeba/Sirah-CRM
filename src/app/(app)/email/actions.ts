@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getUserContext } from "@/lib/auth";
-import { bodyToHtml, mailtoUrl } from "@/lib/email";
+import { bodyToTrackedHtml, mailtoUrl } from "@/lib/email";
 import { formatFrom, resolveEmailConfig } from "@/lib/integrations";
 import type { CommRelatedType } from "@/lib/types";
 
@@ -89,6 +89,10 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     const pixel = appUrl
       ? `<img src="${appUrl}/api/email/open?t=${row.open_token}" width="1" height="1" alt="" style="display:none"/>`
       : "";
+    const html = bodyToTrackedHtml(
+      input.body,
+      appUrl ? (url) => `${appUrl}/api/email/click?t=${row.open_token}&u=${encodeURIComponent(url)}` : undefined,
+    );
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -101,7 +105,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         ...(input.cc?.trim() ? { cc: [input.cc.trim()] } : {}),
         ...(input.bcc?.trim() ? { bcc: [input.bcc.trim()] } : {}),
         subject: input.subject || "(no subject)",
-        html: `${bodyToHtml(input.body)}${pixel}`,
+        html: `${html}${pixel}`,
       }),
     });
     const json = (await res.json().catch(() => ({}))) as { id?: string; message?: string };

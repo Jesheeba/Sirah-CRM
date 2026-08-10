@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserContext } from "@/lib/auth";
 import InvoiceDetailClient from "@/components/invoices/InvoiceDetailClient";
-import type { Invoice, InvoiceItem } from "@/lib/types";
+import type { Invoice, InvoiceItem, Payment } from "@/lib/types";
 
 type ProductPick = {
   id: string;
@@ -30,7 +30,7 @@ export default async function InvoiceDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: invoice }, itemsRes, productsRes, accountsRes, contactsRes, dealsRes, brandingRes] =
+  const [{ data: invoice }, itemsRes, productsRes, accountsRes, contactsRes, dealsRes, brandingRes, paymentsRes, razorpayRes] =
     await Promise.all([
       supabase.from("invoices").select("*, accounts(name)").eq("id", id).is("deleted_at", null).maybeSingle(),
       supabase.from("invoice_items").select("*").eq("invoice_id", id).order("position"),
@@ -44,12 +44,19 @@ export default async function InvoiceDetailPage({
       supabase.from("contacts").select("id, first_name, last_name, email").order("created_at", { ascending: false }),
       supabase.from("deals").select("id, name").is("deleted_at", null).order("created_at", { ascending: false }),
       supabase.from("organization_branding").select("seller_gstin, seller_state_code").maybeSingle(),
+      supabase.from("payments").select("*").eq("invoice_id", id).order("created_at", { ascending: false }),
+      supabase.from("integration_settings").select("is_enabled, secret_set").eq("channel", "razorpay").maybeSingle(),
     ]);
 
   if (!invoice) notFound();
 
   const canEdit =
     ctx.isAdmin || ctx.isManager || (invoice as Invoice).owner_id === ctx.userId;
+
+  const razorpaySettings = razorpayRes.data as { is_enabled?: boolean; secret_set?: boolean } | null;
+  const razorpayConfigured =
+    Boolean(razorpaySettings?.is_enabled && razorpaySettings?.secret_set) ||
+    Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
 
   return (
     <InvoiceDetailClient
@@ -62,6 +69,8 @@ export default async function InvoiceDetailPage({
       sellerGstin={(brandingRes.data as { seller_gstin: string | null; seller_state_code: string | null } | null)?.seller_gstin ?? null}
       sellerStateCode={(brandingRes.data as { seller_gstin: string | null; seller_state_code: string | null } | null)?.seller_state_code ?? null}
       canEdit={canEdit}
+      payments={(paymentsRes.data ?? []) as Payment[]}
+      razorpayConfigured={razorpayConfigured}
     />
   );
 }

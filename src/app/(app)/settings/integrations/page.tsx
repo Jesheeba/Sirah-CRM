@@ -25,11 +25,11 @@ export default async function IntegrationsPage({
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  const [{ data: settingsData }, { data: pagesData }, { data: membersData }, tenantResult, deviceRow, cloudRow] = await Promise.all([
+  const [{ data: settingsData }, { data: pagesData }, { data: membersData }, tenantResult, deviceRow, cloudRow, razorpayRow] = await Promise.all([
     supabase
       .from("integration_settings")
       .select(
-        "id, channel, is_enabled, from_email, from_name, phone_id, business_account_id, sms_sender_id, api_endpoint, secret_set, secret_last4, app_secret_set",
+        "id, channel, is_enabled, from_email, from_name, phone_id, business_account_id, sms_sender_id, api_endpoint, razorpay_key_id, secret_set, secret_last4, app_secret_set",
       ),
     supabase
       .from("meta_lead_pages")
@@ -54,6 +54,13 @@ export default async function IntegrationsPage({
       .eq("tenant_id", ctx.tenantId!)
       .eq("channel", "whatsapp")
       .maybeSingle(),
+    // webhook_token is a secret — only the service-role admin client can read it.
+    admin
+      .from("integration_settings")
+      .select("webhook_token")
+      .eq("tenant_id", ctx.tenantId!)
+      .eq("channel", "razorpay")
+      .maybeSingle(),
   ]);
 
   const settings = (settingsData ?? []) as IntegrationSetting[];
@@ -75,6 +82,11 @@ export default async function IntegrationsPage({
   const cloudWebhookUrl = `${appBase}/api/whatsapp/cloud/webhook`;
   const cloudVerifyToken =
     (cloudRow.data as { verify_token?: string } | null)?.verify_token ?? null;
+
+  const razorpayToken = (razorpayRow.data as { webhook_token?: string } | null)?.webhook_token ?? null;
+  const razorpayWebhookUrl = razorpayToken
+    ? `${appBase}/api/payments/razorpay/webhook/${razorpayToken}`
+    : null;
 
   return (
     <div className="space-y-4">
@@ -103,6 +115,7 @@ export default async function IntegrationsPage({
         webhookUrl={deviceWebhookUrl}
         cloudWebhookUrl={cloudWebhookUrl}
         cloudVerifyToken={cloudVerifyToken}
+        razorpayWebhookUrl={razorpayWebhookUrl}
       />
     </div>
   );

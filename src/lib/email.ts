@@ -21,13 +21,37 @@ export function mergeTemplate(text: string, vars: Record<string, string | number
   });
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 /** Plain-text body → minimal HTML for provider sends (newlines preserved). */
 export function bodyToHtml(body: string): string {
-  const escaped = (body || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  return escaped.replace(/\n/g, "<br/>");
+  return escapeHtml(body || "").replace(/\n/g, "<br/>");
+}
+
+const URL_RE = /\bhttps?:\/\/[^\s<>"]+/g;
+
+/**
+ * Plain-text body → HTML, same as bodyToHtml, but every bare URL becomes a clickable
+ * link — optionally rewritten through `wrapUrl` (the click-tracking redirect) first.
+ * Used for real provider sends only; bodyToHtml stays as-is for callers that don't
+ * need link rewriting (e.g. contexts with no tracking token to attach).
+ */
+export function bodyToTrackedHtml(body: string, wrapUrl?: (url: string) => string): string {
+  if (!body) return "";
+  let html = "";
+  let last = 0;
+  for (const m of body.matchAll(URL_RE)) {
+    const url = m[0];
+    const start = m.index ?? 0;
+    html += escapeHtml(body.slice(last, start));
+    const href = wrapUrl ? wrapUrl(url) : url;
+    html += `<a href="${escapeHtml(href)}">${escapeHtml(url)}</a>`;
+    last = start + url.length;
+  }
+  html += escapeHtml(body.slice(last));
+  return html.replace(/\n/g, "<br/>");
 }
 
 export function mailtoUrl(to: string, subject: string, body: string): string {

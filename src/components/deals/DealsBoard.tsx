@@ -12,6 +12,17 @@ interface MemberOption {
   name: string;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function isRotten(deal: Deal, stage: Stage | undefined): boolean {
+  if (deal.status !== "open" || !stage?.rotten_after_days) return false;
+  return Date.now() - new Date(deal.last_stage_change_at).getTime() > stage.rotten_after_days * DAY_MS;
+}
+
+function daysIdle(deal: Deal): number {
+  return Math.floor((Date.now() - new Date(deal.last_stage_change_at).getTime()) / DAY_MS);
+}
+
 function money(amount: number, currency: string) {
   try {
     return new Intl.NumberFormat("en-IN", {
@@ -135,6 +146,7 @@ export default function DealsBoard({
   const [busy, setBusy] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | DealStatus>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [rottenOnly, setRottenOnly] = useState(false);
   const [lostTarget, setLostTarget] = useState<{ dealId: string; stageId: string } | null>(null);
 
   const defaultPipeline =
@@ -149,15 +161,24 @@ export default function DealsBoard({
     [stages, pipelineId],
   );
 
+  const rottenCount = useMemo(
+    () =>
+      deals.filter(
+        (d) => d.pipeline_id === pipelineId && isRotten(d, stages.find((s) => s.id === d.stage_id)),
+      ).length,
+    [deals, pipelineId, stages],
+  );
+
   const dealsForPipeline = useMemo(
     () =>
       deals.filter((d) => {
         if (d.pipeline_id !== pipelineId) return false;
         if (statusFilter !== "all" && d.status !== statusFilter) return false;
         if (ownerFilter !== "all" && d.owner_id !== ownerFilter) return false;
+        if (rottenOnly && !isRotten(d, stages.find((s) => s.id === d.stage_id))) return false;
         return true;
       }),
-    [deals, pipelineId, statusFilter, ownerFilter],
+    [deals, pipelineId, statusFilter, ownerFilter, rottenOnly, stages],
   );
 
   const pipelineCurrency =
@@ -282,6 +303,21 @@ export default function DealsBoard({
               ))}
             </select>
           )}
+
+          {rottenCount > 0 && (
+            <button
+              onClick={() => setRottenOnly((v) => !v)}
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium ${
+                rottenOnly
+                  ? "border-amber-300 bg-amber-100 text-amber-800"
+                  : "border-slate-300 text-slate-600 hover:bg-slate-50"
+              }`}
+              title="Deals that have sat past their stage's staleness threshold"
+            >
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              Rotten ({rottenCount})
+            </button>
+          )}
         </div>
 
         <button
@@ -375,13 +411,17 @@ export default function DealsBoard({
                     Drop a deal here
                   </div>
                 )}
-                {colDeals.map((d) => (
+                {colDeals.map((d) => {
+                  const rotten = isRotten(d, stage);
+                  return (
                   <div
                     key={d.id}
                     draggable
                     onDragStart={() => setDragId(d.id)}
                     onDragEnd={() => setDragId(null)}
-                    className="cursor-grab rounded-lg border border-slate-200 bg-white p-3 shadow-sm active:cursor-grabbing"
+                    className={`cursor-grab rounded-lg border bg-white p-3 shadow-sm active:cursor-grabbing ${
+                      rotten ? "border-amber-300 border-l-4 border-l-amber-500" : "border-slate-200"
+                    }`}
                   >
                     <Link
                       href={`/deals/${d.id}`}
@@ -393,6 +433,12 @@ export default function DealsBoard({
                     <div className="mt-0.5 text-xs text-slate-500">
                       {d.accounts?.name ?? "No account"}
                     </div>
+                    {rotten && (
+                      <div className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        Idle {daysIdle(d)}d
+                      </div>
+                    )}
                     <div className="mt-1 flex items-center justify-between">
                       <span className="text-sm font-semibold text-brand">
                         {money(Number(d.amount), d.currency)}
@@ -423,7 +469,8 @@ export default function DealsBoard({
                       ))}
                     </select>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );

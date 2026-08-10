@@ -5,9 +5,11 @@ import EditableFields from "@/components/record/EditableFields";
 import RecordTimeline from "@/components/record/RecordTimeline";
 import DealStageBar from "@/components/deals/DealStageBar";
 import NewQuotationButton from "@/components/quotations/NewQuotationButton";
+import AuditHistory from "@/components/record/AuditHistory";
 import { customFieldDefsFor } from "@/lib/customFields";
 import { money } from "@/lib/reports";
 import { quoteNumber, QUOTE_STATUS_STYLE } from "@/lib/quotations";
+import { ACTIVITY_SELECT, activityToTimelineItem } from "@/lib/timeline";
 import type { DealStatus, Quotation, Stage, TimelineItem } from "@/lib/types";
 
 function RelatedCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -48,7 +50,7 @@ export default async function DealDetail({
       .eq("related_to_id", id),
     supabase
       .from("activities")
-      .select("id, subject, type, occurred_at")
+      .select(ACTIVITY_SELECT)
       .eq("related_to_type", "deal")
       .eq("related_to_id", id),
     supabase
@@ -73,9 +75,7 @@ export default async function DealDetail({
     ...((notesRes.data ?? []) as any[]).map((n) => ({
       id: n.id, kind: "note" as const, text: n.body, at: n.created_at,
     })),
-    ...((actsRes.data ?? []) as any[]).map((a) => ({
-      id: a.id, kind: "activity" as const, text: a.subject ?? a.type, meta: a.type, at: a.occurred_at,
-    })),
+    ...((actsRes.data ?? []) as any[]).map(activityToTimelineItem),
     ...((tasksRes.data ?? []) as any[]).map((t) => ({
       id: t.id, kind: "task" as const, text: t.title, meta: t.status, at: t.created_at,
     })),
@@ -194,6 +194,8 @@ export default async function DealDetail({
               Currency: <span className="font-medium text-slate-800">{deal.currency}</span>
             </div>
           </RelatedCard>
+
+          <AuditHistory entityType="deals" entityId={deal.id} />
         </div>
       </div>
     </div>

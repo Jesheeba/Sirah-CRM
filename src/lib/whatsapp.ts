@@ -10,3 +10,10 @@ export function normalizePhone(raw: string | null | undefined): string {
 export function waMeUrl(phone: string, text: string): string {
   return `https://wa.me/${normalizePhone(phone)}?text=${encodeURIComponent(text || "")}`;
 }
+
+const OPT_OUT_KEYWORDS = new Set(["stop", "unsubscribe", "opt out", "optout", "cancel"]);
+
+/** Standard opt-out keywords a recipient might send — checked by both inbound webhooks. */
+export function isOptOutMessage(body: string): boolean {
+  return OPT_OUT_KEYWORDS.has((body ?? "").trim().toLowerCase());
+}

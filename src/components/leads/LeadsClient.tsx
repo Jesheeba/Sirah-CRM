@@ -59,24 +59,10 @@ export default function LeadsClient({
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Lead | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [scoreSort, setScoreSort] = useState<"none" | "desc" | "asc">("none");
+  const [dupWarning, setDupWarning] = useState<Lead[] | null>(null);
 
-  async function createLead(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-
-    const hasName = form.first_name.trim() || form.last_name.trim() || form.company.trim();
-    const hasContact = form.email.trim() || form.phone.trim();
-    if (!hasName) return setError("Enter a name or a company.");
-    if (!hasContact) return setError("Enter an email or a phone number.");
-    if (form.email.trim() && !isValidEmail(form.email)) {
-      return setError("Enter a valid email address (e.g. name@example.com).");
-    }
-    if (form.phone.trim() && !isValidNationalNumber(phoneCountry, form.phone)) {
-      return setError("Enter a valid phone number for the selected country.");
-    }
-    const missing = firstRequiredMissing(customFields, customValues);
-    if (missing) return setError(`${missing} is required.`);
-
+  async function doCreate() {
     setBusy(true);
     const { data, error } = await supabase
       .from("leads")
@@ -105,6 +91,38 @@ export default function LeadsClient({
     setPhoneCountry(DEFAULT_COUNTRY);
     setCustomValues({});
     setShowForm(false);
+    setDupWarning(null);
+  }
+
+  async function createLead(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setDupWarning(null);
+
+    const hasName = form.first_name.trim() || form.last_name.trim() || form.company.trim();
+    const hasContact = form.email.trim() || form.phone.trim();
+    if (!hasName) return setError("Enter a name or a company.");
+    if (!hasContact) return setError("Enter an email or a phone number.");
+    if (form.email.trim() && !isValidEmail(form.email)) {
+      return setError("Enter a valid email address (e.g. name@example.com).");
+    }
+    if (form.phone.trim() && !isValidNationalNumber(phoneCountry, form.phone)) {
+      return setError("Enter a valid phone number for the selected country.");
+    }
+    const missing = firstRequiredMissing(customFields, customValues);
+    if (missing) return setError(`${missing} is required.`);
+
+    // Warn (don't block) on a likely duplicate — same email or phone as an existing lead.
+    const { data: possibleDupes } = await supabase.rpc("fn_find_duplicate_leads", {
+      p_email: form.email.trim() || null,
+      p_phone: toInternational(phoneCountry, form.phone) || null,
+    });
+    if (possibleDupes && (possibleDupes as Lead[]).length > 0) {
+      setDupWarning(possibleDupes as Lead[]);
+      return;
+    }
+
+    await doCreate();
   }
 
   async function changeStatus(id: string, status: LeadStatus) {
@@ -146,7 +164,15 @@ export default function LeadsClient({
     setLeads((ls) => ls.filter((l) => l.id !== id));
   }
 
-  const visible = view === "mine" ? leads.filter((l) => l.owner_id === userId) : leads;
+  const filtered = view === "mine" ? leads.filter((l) => l.owner_id === userId) : leads;
+  const visible =
+    scoreSort === "none"
+      ? filtered
+      : [...filtered].sort((a, b) => (scoreSort === "desc" ? b.score - a.score : a.score - b.score));
+
+  function toggleScoreSort() {
+    setScoreSort((s) => (s === "none" ? "desc" : s === "desc" ? "asc" : "none"));
+  }
 
   return (
     <div className="space-y-4">
@@ -172,17 +198,55 @@ export default function LeadsClient({
             </button>
           </div>
         </div>
-        <button
-          onClick={() => setShowForm((s) => !s)}
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-        >
-          + Add lead
-        </button>
+        <div className="flex gap-2">
+          <Link
+            href="/leads/duplicates"
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+          >
+            Review duplicates
+          </Link>
+          <button
+            onClick={() => setShowForm((s) => !s)}
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+          >
+            + Add lead
+          </button>
+        </div>
       </div>
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {dupWarning && (
+        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="font-medium">
+            {dupWarning.length} possible duplicate{dupWarning.length > 1 ? "s" : ""} found:
+          </p>
+          <ul className="list-inside list-disc">
+            {dupWarning.map((d) => (
+              <li key={d.id}>
+                {leadName(d)} — {d.email || d.phone}
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2">
+            <button
+              onClick={doCreate}
+              disabled={busy}
+              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {busy ? "Creating…" : "Create anyway"}
+            </button>
+            <button
+              onClick={() => setDupWarning(null)}
+              className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs text-amber-700 hover:bg-amber-100"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
@@ -253,7 +317,17 @@ export default function LeadsClient({
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Company</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Score</th>
+              <th className="px-4 py-3">
+                <button
+                  onClick={toggleScoreSort}
+                  className="flex items-center gap-1 uppercase tracking-wide text-slate-500 hover:text-brand"
+                  title="Sort by score"
+                >
+                  Score
+                  {scoreSort === "desc" && <span>▼</span>}
+                  {scoreSort === "asc" && <span>▲</span>}
+                </button>
+              </th>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -290,7 +364,20 @@ export default function LeadsClient({
                     ))}
                   </select>
                 </td>
-                <td className="px-4 py-3 text-slate-600">{l.score}</td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`inline-flex min-w-[2.25rem] justify-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      l.score >= 50
+                        ? "bg-emerald-100 text-emerald-700"
+                        : l.score >= 20
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-slate-100 text-slate-500"
+                    }`}
+                    title="Lead score — see Settings → Lead Scoring for how it's calculated"
+                  >
+                    {l.score}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-slate-600">{l.email ?? "—"}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-2">

@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { executeAction, type RunContext } from "@/lib/workflow-runner";
+import { processNotificationEmailDigest } from "@/lib/notification-digest";
+import { processRottenDeals } from "@/lib/rotten-deals";
+import { processSequenceEnrollments } from "@/lib/sequence-runner";
+import { processInactivityDecay } from "@/lib/lead-score-runner";
+import { processReportSchedules } from "@/lib/report-scheduler";
+import { processEmailCampaigns } from "@/lib/campaign-runner";
+import { processMetaDeletionRequests } from "@/lib/meta-data-deletion";
 
 export const runtime = "nodejs";
 export const maxDuration = 55;
@@ -122,7 +129,33 @@ export async function POST(req: NextRequest) {
     .lt("due_date", new Date().toISOString().slice(0, 10))
     .is("deleted_at", null);
 
-  return NextResponse.json({ processed: batch.length, done, failed });
+  // Rotten deal detection — runs before the digest so same-day flags land in today's email.
+  const rotten = await processRottenDeals(admin).catch(() => null);
+
+  // Sequence steps — must run before the digest so a step's send shows up in today's email.
+  const sequences = await processSequenceEnrollments(admin).catch(() => null);
+
+  // Lead inactivity decay — runs before the digest so a decay lands in today's email.
+  const scoreDecay = await processInactivityDecay(admin).catch(() => null);
+
+  // Scheduled report emails.
+  const reportSchedules = await processReportSchedules(admin).catch(() => null);
+
+  // Bulk email campaigns — batches pending recipients for any campaign in 'sending'.
+  const campaigns = await processEmailCampaigns(admin).catch(() => null);
+
+  // Daily notification email digest (see lib/notification-digest.ts for why this rides
+  // this same daily cron rather than its own schedule).
+  const digest = await processNotificationEmailDigest(admin).catch(() => null);
+
+  // Meta data-deletion requests — enqueued by the callback route, processed here so it
+  // can respond to Meta within a few seconds instead of deleting inline.
+  const metaDeletions = await processMetaDeletionRequests(admin).catch(() => null);
+
+  return NextResponse.json({
+    processed: batch.length, done, failed, rotten, sequences, scoreDecay, reportSchedules, campaigns, digest,
+    metaDeletions,
+  });
 }
 
 // Allow Vercel's GET-based cron ping as well

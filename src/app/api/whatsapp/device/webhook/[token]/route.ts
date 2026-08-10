@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { normalizePhone } from "@/lib/whatsapp";
+import { normalizePhone, isOptOutMessage } from "@/lib/whatsapp";
 
 // UltraMsg does NOT perform a hub.challenge verification handshake (unlike Meta).
 // A simple 200 is sufficient for GET.
@@ -77,6 +77,12 @@ export async function POST(
     // non-digits (same as normalizePhone) to get the digits-only format we store.
     const senderPhone = normalizePhone(data.from.replace(/@c\.us$/i, ""));
 
+    if (isOptOutMessage(data.body)) {
+      await admin
+        .from("whatsapp_optouts")
+        .upsert({ tenant_id: setting.tenant_id, phone: senderPhone }, { onConflict: "tenant_id,phone" });
+    }
+
     // Link to an existing lead or contact by matching normalized phone on both sides.
     // We check both the raw stored value and the "+"-prefixed version since the CRM
     // may store phones in either format.
@@ -123,6 +129,7 @@ export async function POST(
       provider_message_id: data.id,
       related_to_type: relatedToType,
       related_to_id: relatedToId,
+      is_read: false,
     });
   } catch {
     // Always 200 so UltraMsg doesn't retry on a bad payload.

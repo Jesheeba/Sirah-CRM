@@ -6,7 +6,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveEmailConfig, resolveWhatsAppConfig, formatFrom } from "@/lib/integrations";
-import { bodyToHtml, mergeTemplate } from "@/lib/email";
+import { bodyToTrackedHtml, mergeTemplate } from "@/lib/email";
 import { normalizePhone } from "@/lib/whatsapp";
 
 export interface RunContext {
@@ -79,6 +79,10 @@ async function execSendEmail(ctx: RunContext): Promise<ActionResult> {
   const pixel = appUrl
     ? `<img src="${appUrl}/api/email/open?t=${row.open_token}" width="1" height="1" alt="" style="display:none"/>`
     : "";
+  const html = bodyToTrackedHtml(
+    body,
+    appUrl ? (url) => `${appUrl}/api/email/click?t=${row.open_token}&u=${encodeURIComponent(url)}` : undefined,
+  );
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -90,7 +94,7 @@ async function execSendEmail(ctx: RunContext): Promise<ActionResult> {
       from: formatFrom(cfg.fromEmail!, cfg.fromName),
       to: [to_email],
       subject: subject || "(no subject)",
-      html: `${bodyToHtml(body)}${pixel}`,
+      html: `${html}${pixel}`,
     }),
   });
 

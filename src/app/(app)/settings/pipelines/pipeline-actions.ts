@@ -115,7 +115,7 @@ export async function deletePipeline(id: string): Promise<{ ok: boolean; error?:
 
 export async function createStage(
   pipelineId: string,
-  data: { name: string; probability: number; is_won: boolean; is_lost: boolean },
+  data: { name: string; probability: number; is_won: boolean; is_lost: boolean; rotten_after_days?: number | null },
 ): Promise<{ ok: boolean; error?: string; stage?: Stage }> {
   const ctx = await adminCtx();
   if (!ctx) return { ok: false, error: "Admin access required" };
@@ -138,6 +138,7 @@ export async function createStage(
       probability: data.probability,
       is_won: data.is_won,
       is_lost: data.is_lost,
+      rotten_after_days: data.rotten_after_days ?? null,
       display_order: nextOrder,
     })
     .select("*")
@@ -150,7 +151,7 @@ export async function createStage(
 
 export async function updateStage(
   id: string,
-  data: { name?: string; probability?: number; is_won?: boolean; is_lost?: boolean },
+  data: { name?: string; probability?: number; is_won?: boolean; is_lost?: boolean; rotten_after_days?: number | null },
 ): Promise<{ ok: boolean; error?: string }> {
   const ctx = await adminCtx();
   if (!ctx) return { ok: false, error: "Admin access required" };
@@ -160,6 +161,7 @@ export async function updateStage(
   if (data.probability !== undefined) updates.probability = data.probability;
   if (data.is_won !== undefined) updates.is_won = data.is_won;
   if (data.is_lost !== undefined) updates.is_lost = data.is_lost;
+  if (data.rotten_after_days !== undefined) updates.rotten_after_days = data.rotten_after_days;
 
   const { error } = await ctx.admin
     .from("stages")

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { normalizePhone } from "@/lib/whatsapp";
+import { normalizePhone, isOptOutMessage } from "@/lib/whatsapp";
 
 // Node.js runtime required for the `crypto` module (HMAC verification).
 export const runtime = "nodejs";
@@ -102,6 +102,12 @@ export async function POST(req: NextRequest) {
       const senderPhone = normalizePhone(msg.from);
       const body = msg.text?.body ?? msg.caption ?? "";
 
+      if (isOptOutMessage(body)) {
+        await admin
+          .from("whatsapp_optouts")
+          .upsert({ tenant_id: tenantId, phone: senderPhone }, { onConflict: "tenant_id,phone" });
+      }
+
       let relatedToType: string | null = null;
       let relatedToId: string | null = null;
 
@@ -141,6 +147,7 @@ export async function POST(req: NextRequest) {
         provider_message_id: msg.id,
         related_to_type: relatedToType,
         related_to_id: relatedToId,
+        is_read: false,
       });
     }
 

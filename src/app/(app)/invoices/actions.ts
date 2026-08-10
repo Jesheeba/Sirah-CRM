@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getUserContext } from "@/lib/auth";
 import { resolveEmailConfig } from "@/lib/integrations";
-import type { DiscountType } from "@/lib/types";
+import { resolveRazorpayConfig, razorpayAuthHeader } from "@/lib/payments";
+import type { DiscountType, Payment } from "@/lib/types";
 
 type SaveResult = { ok: boolean; error?: string; id?: string };
 
@@ -281,6 +282,101 @@ export async function sendInvoiceEmail(invoiceId: string): Promise<SaveResult> {
   revalidatePath(`/invoices/${invoiceId}`);
   revalidatePath("/invoices");
   return { ok: true };
+}
+
+// ── Collect Payment (Razorpay Payment Link) ───────────────────────────────────
+
+type PaymentLinkResult = { ok: boolean; error?: string; payment?: Payment };
+
+/**
+ * Creates a Razorpay Payment Link for an invoice's outstanding balance and stores it as
+ * a `payments` row (status='created'). The link is NOT auto-shared — the rep copies it
+ * from the invoice detail page and sends it however they choose (email, WhatsApp, etc).
+ *
+ * The invoice is only ever marked paid by the webhook (fn_record_payment_captured),
+ * never by this action — this action only ever creates a pending payment attempt.
+ */
+export async function createPaymentLink(invoiceId: string): Promise<PaymentLinkResult> {
+  const ctx = await getUserContext();
+  if (!ctx) return { ok: false, error: "Not authenticated." };
+  if (!ctx.tenantId) return { ok: false, error: "No organization found." };
+
+  const supabase = await createClient();
+
+  const { data: inv } = await supabase
+    .from("invoices")
+    .select("id, invoice_number, title, total, paid_amount, currency, owner_id, contacts(first_name, last_name, email, phone)")
+    .eq("id", invoiceId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!inv) return { ok: false, error: "Invoice not found." };
+
+  const canEdit = ctx.isAdmin || ctx.isManager || inv.owner_id === ctx.userId;
+  if (!canEdit) return { ok: false, error: "You don't have permission to collect payment on this invoice." };
+
+  const balance = Math.round((Number(inv.total) - Number(inv.paid_amount)) * 100) / 100;
+  if (balance <= 0) return { ok: false, error: "This invoice has no outstanding balance." };
+
+  const cfg = await resolveRazorpayConfig(ctx.tenantId);
+  if (cfg.mode === "none" || !cfg.keyId || !cfg.keySecret) {
+    return { ok: false, error: "Razorpay is not configured. Go to Settings → Integrations → Razorpay to set it up." };
+  }
+
+  const invNum = inv.invoice_number != null
+    ? `INV-${String(inv.invoice_number).padStart(5, "0")}`
+    : "Invoice";
+  const contact = inv.contacts as unknown as { first_name: string | null; last_name: string | null; email: string | null; phone: string | null } | null;
+  const customerName = [contact?.first_name, contact?.last_name].filter(Boolean).join(" ") || undefined;
+
+  const res = await fetch("https://api.razorpay.com/v1/payment_links", {
+    method: "POST",
+    headers: {
+      Authorization: razorpayAuthHeader(cfg.keyId, cfg.keySecret),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      amount: Math.round(balance * 100), // smallest currency unit
+      currency: inv.currency ?? "INR",
+      description: `${invNum} — ${inv.title}`,
+      customer: {
+        ...(customerName ? { name: customerName } : {}),
+        ...(contact?.email ? { email: contact.email } : {}),
+        ...(contact?.phone ? { contact: contact.phone } : {}),
+      },
+      notify: { sms: false, email: false }, // the rep shares the link manually
+      reminder_enable: false,
+      reference_id: invoiceId,
+      notes: { invoice_id: invoiceId, tenant_id: ctx.tenantId },
+      callback_url: `${(process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "")}/invoices/${invoiceId}`,
+      callback_method: "get",
+    }),
+  });
+
+  if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as { error?: { description?: string } };
+    return { ok: false, error: json.error?.description ?? `Razorpay request failed (${res.status})` };
+  }
+
+  const link = (await res.json()) as { id: string; short_url: string };
+
+  const { data: payment, error } = await supabase
+    .from("payments")
+    .insert({
+      invoice_id: invoiceId,
+      amount: balance,
+      currency: inv.currency ?? "INR",
+      razorpay_payment_link_id: link.id,
+      short_url: link.short_url,
+      status: "created",
+    })
+    .select("*")
+    .single();
+
+  if (error || !payment) return { ok: false, error: error?.message ?? "Payment link created but could not be saved." };
+
+  revalidatePath(`/invoices/${invoiceId}`);
+  return { ok: true, payment: payment as Payment };
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────

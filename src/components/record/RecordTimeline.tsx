@@ -32,21 +32,6 @@ const OUTCOME_STYLE: Record<CallOutcome, string> = {
   left_voicemail: "bg-slate-100 text-slate-600",
 };
 
-// subject encoding for calls: "direction|outcome|duration|notes"
-function encodeCall(dir: CallDirection, outcome: CallOutcome, mins: string, notes: string) {
-  return [dir, outcome, mins, notes.replace(/\|/g, " ")].join("|");
-}
-
-function decodeCall(subject: string) {
-  const [dir = "", outcome = "", mins = "", ...rest] = subject.split("|");
-  return {
-    direction: dir as CallDirection,
-    outcome:   outcome as CallOutcome,
-    duration:  mins,
-    notes:     rest.join("|"),
-  };
-}
-
 function fmt(at: string) {
   try { return new Date(at).toLocaleString(); } catch { return at; }
 }
@@ -117,13 +102,15 @@ export default function RecordTimeline({
 
   async function logCall() {
     setBusy(true); setError(null);
-    const encoded = encodeCall(callDir, callOutcome, callDuration, callNotes);
     const { data, error } = await supabase
       .from("activities")
       .insert({
         type: "call",
-        subject: encoded,
-        description: callNotes,
+        subject: "Call",
+        description: callNotes || null,
+        direction: callDir,
+        outcome: callOutcome,
+        duration_minutes: callDuration ? Number(callDuration) : null,
         related_to_type: recordType,
         related_to_id: recordId,
         owner_id: userId,
@@ -131,7 +118,13 @@ export default function RecordTimeline({
       .select().single();
     setBusy(false);
     if (error) return setError(error.message);
-    setItems((xs) => [{ id: data.id, kind: "activity", text: data.subject, meta: "call", at: data.occurred_at }, ...xs]);
+    setItems((xs) => [
+      {
+        id: data.id, kind: "activity", text: data.subject, meta: "call", at: data.occurred_at,
+        call: { direction: data.direction, outcome: data.outcome, duration_minutes: data.duration_minutes, notes: data.description },
+      },
+      ...xs,
+    ]);
     setCallDuration("");
     setCallNotes("");
   }
@@ -301,9 +294,9 @@ export default function RecordTimeline({
                     <button onClick={() => setEditId(null)} className="text-xs text-slate-500 hover:underline">Cancel</button>
                   </div>
                 </div>
-              ) : it.kind === "activity" && it.meta === "call" ? (
+              ) : it.kind === "activity" && it.meta === "call" && it.call ? (
                 /* ── Call activity — structured display ── */
-                <CallEntry text={it.text} />
+                <CallEntry {...it.call} />
               ) : (
                 <div className="text-sm text-slate-700">
                   {it.meta && it.kind === "activity" && (
@@ -340,11 +333,19 @@ export default function RecordTimeline({
 
 // ── Call entry renderer ────────────────────────────────────────────────────────
 
-function CallEntry({ text }: { text: string }) {
-  const { direction, outcome, duration, notes } = decodeCall(text);
-
+function CallEntry({
+  direction,
+  outcome,
+  duration_minutes,
+  notes,
+}: {
+  direction: string | null;
+  outcome: string | null;
+  duration_minutes: number | null;
+  notes: string | null;
+}) {
   const dirLabel     = direction === "inbound" ? "Inbound" : "Outbound";
-  const outcomeLabel = OUTCOME_LABEL[outcome as CallOutcome] ?? outcome;
+  const outcomeLabel = OUTCOME_LABEL[outcome as CallOutcome] ?? outcome ?? "—";
   const dirCls       = DIR_STYLE[direction as CallDirection]     ?? "bg-slate-100 text-slate-500";
   const outcomeCls   = OUTCOME_STYLE[outcome as CallOutcome]     ?? "bg-slate-100 text-slate-500";
 
@@ -353,9 +354,9 @@ function CallEntry({ text }: { text: string }) {
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${dirCls}`}>{dirLabel}</span>
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${outcomeCls}`}>{outcomeLabel}</span>
-        {duration && (
+        {duration_minutes != null && (
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-            {duration} min
+            {duration_minutes} min
           </span>
         )}
       </div>

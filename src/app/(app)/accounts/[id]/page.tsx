@@ -3,7 +3,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import EditableFields from "@/components/record/EditableFields";
 import RecordTimeline from "@/components/record/RecordTimeline";
+import AuditHistory from "@/components/record/AuditHistory";
 import { customFieldDefsFor } from "@/lib/customFields";
+import { ACTIVITY_SELECT, activityToTimelineItem } from "@/lib/timeline";
 import type { TimelineItem } from "@/lib/types";
 
 function RelatedCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -53,7 +55,7 @@ export default async function AccountDetail({
       .eq("related_to_id", id),
     supabase
       .from("activities")
-      .select("id, subject, type, occurred_at")
+      .select(ACTIVITY_SELECT)
       .eq("related_to_type", "account")
       .eq("related_to_id", id),
     supabase
@@ -68,9 +70,7 @@ export default async function AccountDetail({
     ...(notesRes.data ?? []).map((n) => ({
       id: n.id, kind: "note" as const, text: n.body, at: n.created_at,
     })),
-    ...(actsRes.data ?? []).map((a) => ({
-      id: a.id, kind: "activity" as const, text: a.subject ?? a.type, meta: a.type, at: a.occurred_at,
-    })),
+    ...(actsRes.data ?? []).map(activityToTimelineItem),
     ...(tasksRes.data ?? []).map((t) => ({
       id: t.id, kind: "task" as const, text: t.title, meta: t.status, at: t.created_at,
     })),
@@ -142,6 +142,8 @@ export default async function AccountDetail({
               ))
             )}
           </RelatedCard>
+
+          <AuditHistory entityType="accounts" entityId={account.id} />
         </div>
       </div>
     </div>

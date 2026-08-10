@@ -6,6 +6,7 @@ import {
   clearIntegrationSecret,
   saveIntegration,
   saveWhatsAppCloudConfig,
+  saveRazorpayConfig,
   type SaveIntegrationInput,
 } from "@/app/(app)/settings/integrations/actions";
 import { connectWhatsAppEmbedded } from "@/app/(app)/settings/integrations/embedded-signup-actions";
@@ -302,11 +303,13 @@ function WhatsAppCloudCard({
           setConnecting(false);
           return;
         }
-        // Poll up to 2 s for the message event to deliver waba_id + phone_number_id.
+        // Poll up to 2 s for the message event to deliver waba_id (+ optionally
+        // phone_number_id — if that's missing the backend looks it up from
+        // the WABA directly, since Meta doesn't always include it here).
         let attempts = 0;
         const tryConnect = () => {
           const { waba_id, phone_number_id } = window.__waSignup ?? {};
-          if (waba_id && phone_number_id) {
+          if (waba_id) {
             connectWhatsAppEmbedded({ code, waba_id, phone_number_id })
               .then((res) => {
                 setConnecting(false);
@@ -326,7 +329,7 @@ function WhatsAppCloudCard({
             attempts++;
             setTimeout(tryConnect, 200);
           } else {
-            setConnectError("Signup completed but WABA or phone ID was not received. Please try again.");
+            setConnectError("Signup completed but no WhatsApp Business Account was received. Please try again.");
             setConnecting(false);
           }
         };
@@ -786,16 +789,197 @@ function WhatsAppDeviceCard({
   );
 }
 
+function RazorpayCard({
+  initial,
+  webhookUrl,
+}: {
+  initial?: IntegrationSetting;
+  webhookUrl?: string | null;
+}) {
+  const [enabled, setEnabled] = useState(initial?.is_enabled ?? false);
+  const [keyId, setKeyId] = useState(initial?.razorpay_key_id ?? "");
+  const [keySecret, setKeySecret] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
+  const [secretSet, setSecretSet] = useState(initial?.secret_set ?? false);
+  const [last4, setLast4] = useState(initial?.secret_last4 ?? null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSaved(false);
+    setBusy(true);
+    const res = await saveRazorpayConfig({
+      is_enabled: enabled,
+      razorpay_key_id: keyId || null,
+      key_secret: keySecret || null,
+      webhook_secret: webhookSecret || null,
+    });
+    setBusy(false);
+    if (!res.ok) return setError(res.error ?? "Could not save.");
+    if (keySecret.trim()) {
+      setSecretSet(true);
+      setLast4(keySecret.trim().slice(-4));
+      setKeySecret("");
+    }
+    if (webhookSecret.trim()) setWebhookSecret("");
+    setSaved(true);
+  }
+
+  async function clearSecret() {
+    setError(null);
+    setBusy(true);
+    const res = await clearIntegrationSecret("razorpay");
+    setBusy(false);
+    if (!res.ok) return setError(res.error ?? "Could not clear.");
+    setSecretSet(false);
+    setLast4(null);
+    setKeySecret("");
+    setEnabled(false);
+  }
+
+  function copyWebhookUrl() {
+    if (!webhookUrl) return;
+    navigator.clipboard.writeText(webhookUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <form onSubmit={save} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-700">Razorpay</h2>
+          <p className="text-xs text-slate-400">Payment collection — invoice &quot;Collect payment&quot; links</p>
+        </div>
+        <span
+          className={`rounded-full px-2 py-1 text-xs font-medium ${
+            secretSet ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
+          }`}
+        >
+          {secretSet ? `Configured ✓ ••••${last4 ?? ""}` : "Not configured"}
+        </span>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+      {saved && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+          Saved.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label className="text-xs uppercase tracking-wide text-slate-400">Key ID</label>
+          <input
+            value={keyId}
+            onChange={(e) => setKeyId(e.target.value)}
+            placeholder="rzp_live_xxxxxxxxxxxx"
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wide text-slate-400">Key secret</label>
+          <input
+            type="password"
+            value={keySecret}
+            onChange={(e) => setKeySecret(e.target.value)}
+            placeholder={secretSet ? `••••${last4 ?? ""} (leave blank to keep)` : "Paste your key secret"}
+            autoComplete="off"
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wide text-slate-400">Webhook secret</label>
+          <input
+            type="password"
+            value={webhookSecret}
+            onChange={(e) => setWebhookSecret(e.target.value)}
+            placeholder="Set on the Razorpay webhook, paste here too"
+            autoComplete="off"
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+          />
+        </div>
+        {webhookUrl && (
+          <div>
+            <label className="text-xs uppercase tracking-wide text-slate-400">Webhook URL</label>
+            <div className="mt-1 flex gap-1">
+              <input
+                readOnly
+                value={webhookUrl}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 outline-none"
+              />
+              <button
+                type="button"
+                onClick={copyWebhookUrl}
+                className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-500 hover:bg-slate-50"
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <p className="text-xs text-slate-400">
+        Save once to generate this tenant&apos;s webhook URL, then paste it into Razorpay Dashboard
+        → Settings → Webhooks, subscribe to the <span className="font-mono">payment_link.paid</span>{" "}
+        event, and paste the secret Razorpay shows you back into the field above.
+      </p>
+
+      <label className="flex items-center gap-2 text-sm text-slate-600">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          className="h-4 w-4 rounded border-slate-300"
+        />
+        Enabled (allow generating payment links on invoices)
+      </label>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        {secretSet && (
+          <button
+            type="button"
+            onClick={clearSecret}
+            disabled={busy}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Clear key
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
 export default function IntegrationsClient({
   initial,
   webhookUrl,
   cloudWebhookUrl,
   cloudVerifyToken,
+  razorpayWebhookUrl,
 }: {
   initial: IntegrationSetting[];
   webhookUrl?: string | null;
   cloudWebhookUrl: string;
   cloudVerifyToken?: string | null;
+  razorpayWebhookUrl?: string | null;
 }) {
   const byChannel = Object.fromEntries(initial.map((s) => [s.channel, s])) as Record<
     IntegrationChannel,
@@ -811,6 +995,7 @@ export default function IntegrationsClient({
         cloudVerifyToken={cloudVerifyToken}
       />
       <WhatsAppDeviceCard initial={byChannel.whatsapp_device} webhookUrl={webhookUrl} />
+      <RazorpayCard initial={byChannel.razorpay} webhookUrl={razorpayWebhookUrl} />
 
       {/* SMS scaffold — no live provider wired yet. */}
       <div className="space-y-1 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 opacity-70">

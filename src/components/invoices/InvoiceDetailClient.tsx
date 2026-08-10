@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { Invoice, InvoiceItem, DiscountType, InvoiceStatus } from "@/lib/types";
+import type { Invoice, InvoiceItem, DiscountType, InvoiceStatus, Payment, PaymentLinkStatus } from "@/lib/types";
 import {
   saveInvoiceHeader,
   saveInvoiceLine,
@@ -11,6 +11,7 @@ import {
   removeInvoiceLine,
   deleteInvoice,
   sendInvoiceEmail,
+  createPaymentLink,
 } from "@/app/(app)/invoices/actions";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -133,6 +134,19 @@ const STATUS_STYLE: Record<InvoiceStatus, string> = {
   cancelled: "bg-slate-100 text-slate-500",
 };
 
+const PAYMENT_LINK_STATUS_STYLE: Record<PaymentLinkStatus, string> = {
+  created:   "bg-amber-100 text-amber-700",
+  paid:      "bg-green-100 text-green-700",
+  failed:    "bg-red-100 text-red-700",
+  cancelled: "bg-slate-100 text-slate-500",
+  expired:   "bg-slate-100 text-slate-500",
+};
+
+function formatDateTime(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+}
+
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function InvoiceDetailClient({
@@ -145,6 +159,8 @@ export default function InvoiceDetailClient({
   sellerGstin,
   sellerStateCode,
   canEdit,
+  payments: initialPayments,
+  razorpayConfigured,
 }: {
   invoice: Invoice;
   items: InvoiceItem[];
@@ -155,6 +171,8 @@ export default function InvoiceDetailClient({
   sellerGstin: string | null;
   sellerStateCode: string | null;
   canEdit: boolean;
+  payments: Payment[];
+  razorpayConfigured: boolean;
 }) {
   const router = useRouter();
   const ro = !canEdit;
@@ -188,6 +206,12 @@ export default function InvoiceDetailClient({
   const [addingProduct, setAddingProduct] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+
+  // Payment links
+  const [payments, setPayments] = useState<Payment[]>(initialPayments);
+  const [creatingLink, setCreatingLink] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const { subtotal, taxAmount, discountAmount, total } = computeTotals(lines, discountType, discountValue);
   const balance = total - paidAmount;
@@ -321,6 +345,24 @@ export default function InvoiceDetailClient({
     setShowPayModal(false);
     await saveInvoiceHeader({ id: initial.id, paid_amount: clamped });
     router.refresh();
+  }
+
+  // ── collect payment (Razorpay link) ──────────────────────────────────────────
+
+  async function handleCreatePaymentLink() {
+    setLinkError(null);
+    setCreatingLink(true);
+    const res = await createPaymentLink(initial.id);
+    setCreatingLink(false);
+    if (!res.ok || !res.payment) return setLinkError(res.error ?? "Could not create payment link.");
+    setPayments((prev) => [res.payment!, ...prev]);
+  }
+
+  function copyLink(id: string, url: string) {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId((cur) => (cur === id ? null : cur)), 2000);
+    });
   }
 
   // ── delete ───────────────────────────────────────────────────────────────────
@@ -808,6 +850,93 @@ export default function InvoiceDetailClient({
               </div>
             )}
           </div>
+
+          {/* Payments (Razorpay) */}
+          {canEdit && (
+            <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-700">Payments</h2>
+                {razorpayConfigured && balance > 0 && (
+                  <button
+                    onClick={handleCreatePaymentLink}
+                    disabled={creatingLink}
+                    className="rounded-lg border border-green-300 px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                  >
+                    {creatingLink ? "Creating…" : "Collect payment"}
+                  </button>
+                )}
+              </div>
+
+              {!razorpayConfigured && (
+                <p className="text-xs text-slate-400">
+                  Connect Razorpay under{" "}
+                  <Link href="/settings/integrations" className="text-brand hover:underline">
+                    Settings → Integrations
+                  </Link>{" "}
+                  to collect payments online.
+                </p>
+              )}
+
+              {razorpayConfigured && balance <= 0 && payments.length === 0 && (
+                <p className="text-xs text-slate-400">This invoice has no outstanding balance.</p>
+              )}
+
+              {linkError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {linkError}
+                </div>
+              )}
+
+              {payments.length === 0 ? (
+                razorpayConfigured && (
+                  <p className="text-xs text-slate-400">No payment links yet.</p>
+                )
+              ) : (
+                <ul className="space-y-2">
+                  {payments.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-700">
+                            {money(p.amount, p.currency)}
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${PAYMENT_LINK_STATUS_STYLE[p.status]}`}>
+                            {p.status}
+                          </span>
+                        </div>
+                        <p className="truncate text-xs text-slate-400">
+                          {p.status === "paid"
+                            ? `Paid ${formatDateTime(p.paid_at)}${p.method ? ` · ${p.method}` : ""}`
+                            : `Created ${formatDateTime(p.created_at)}`}
+                        </p>
+                      </div>
+                      {p.short_url && p.status === "created" && (
+                        <div className="flex shrink-0 gap-1">
+                          <a
+                            href={p.short_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                          >
+                            Open
+                          </a>
+                          <button
+                            onClick={() => copyLink(p.id, p.short_url!)}
+                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                          >
+                            {copiedId === p.id ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* Danger zone */}
           {canEdit && (

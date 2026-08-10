@@ -3,15 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserContext } from "@/lib/auth";
 import ReportsClient from "@/components/reports/ReportsClient";
 import type { Member } from "@/components/tasks/TasksClient";
-import type { SavedReport } from "@/lib/types";
+import type { ReportSchedule, SavedReport } from "@/lib/types";
 
 export default async function ReportsPage() {
   const supabase = await createClient();
   const ctx = (await getUserContext())!;
 
-  const [membersRes, savedRes] = await Promise.all([
+  const [membersRes, savedRes, schedulesRes] = await Promise.all([
     supabase.from("profiles").select("id, full_name, email").order("full_name"),
     supabase.from("saved_reports").select("*").order("created_at", { ascending: false }),
+    supabase.from("report_schedules").select("*").order("created_at", { ascending: false }),
   ]);
 
   return (
@@ -41,8 +42,10 @@ export default async function ReportsPage() {
       <ReportsClient
         members={(membersRes.data ?? []) as Member[]}
         savedReports={(savedRes.data ?? []) as SavedReport[]}
+        schedules={(schedulesRes.data ?? []) as ReportSchedule[]}
         userId={ctx.userId}
         canSeeAll={ctx.isManager || ctx.isAdmin}
+        canSchedule={ctx.isManager || ctx.isAdmin}
       />
     </div>
   );

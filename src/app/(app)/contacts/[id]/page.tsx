@@ -3,7 +3,10 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import EditableFields from "@/components/record/EditableFields";
 import RecordTimeline from "@/components/record/RecordTimeline";
+import ConversationThread from "@/components/contacts/ConversationThread";
+import AuditHistory from "@/components/record/AuditHistory";
 import { customFieldDefsFor } from "@/lib/customFields";
+import { ACTIVITY_SELECT, activityToTimelineItem } from "@/lib/timeline";
 import type { TimelineItem } from "@/lib/types";
 
 function RelatedCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -48,7 +51,7 @@ export default async function ContactDetail({
       .eq("related_to_id", id),
     supabase
       .from("activities")
-      .select("id, subject, type, occurred_at")
+      .select(ACTIVITY_SELECT)
       .eq("related_to_type", "contact")
       .eq("related_to_id", id),
     supabase
@@ -63,9 +66,7 @@ export default async function ContactDetail({
     ...(notesRes.data ?? []).map((n) => ({
       id: n.id, kind: "note" as const, text: n.body, at: n.created_at,
     })),
-    ...(actsRes.data ?? []).map((a) => ({
-      id: a.id, kind: "activity" as const, text: a.subject ?? a.type, meta: a.type, at: a.occurred_at,
-    })),
+    ...(actsRes.data ?? []).map(activityToTimelineItem),
     ...(tasksRes.data ?? []).map((t) => ({
       id: t.id, kind: "task" as const, text: t.title, meta: t.status, at: t.created_at,
     })),
@@ -86,28 +87,6 @@ export default async function ContactDetail({
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold text-slate-800">{fullName}</h1>
-        <div className="flex gap-2">
-          {contact.email && (
-            <Link
-              href={`/email?compose=1&to=${encodeURIComponent(contact.email)}&name=${encodeURIComponent(
-                fullName
-              )}&rtype=contact&rid=${contact.id}`}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              ✉ Email
-            </Link>
-          )}
-          {contact.phone && (
-            <Link
-              href={`/whatsapp?compose=1&to=${encodeURIComponent(contact.phone)}&name=${encodeURIComponent(
-                fullName
-              )}&rtype=contact&rid=${contact.id}`}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              💬 WhatsApp
-            </Link>
-          )}
-        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[18rem_1fr_18rem]">
@@ -160,8 +139,17 @@ export default async function ContactDetail({
               ))
             )}
           </RelatedCard>
+
+          <AuditHistory entityType="contacts" entityId={contact.id} />
         </div>
       </div>
+
+      <ConversationThread
+        contactId={contact.id}
+        contactName={fullName}
+        contactEmail={contact.email}
+        contactPhone={contact.phone}
+      />
     </div>
   );
 }

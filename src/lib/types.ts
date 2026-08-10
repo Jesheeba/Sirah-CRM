@@ -56,6 +56,7 @@ export interface Stage {
   probability: number;
   is_won: boolean;
   is_lost: boolean;
+  rotten_after_days: number | null;
 }
 
 export interface Deal {
@@ -75,6 +76,8 @@ export interface Deal {
   closed_at: string | null;
   owner_id: string | null;
   created_at: string;
+  last_stage_change_at: string;
+  rotten_notified_at: string | null;
   accounts?: { name: string } | null;
   custom_fields?: Record<string, string> | null;
 }
@@ -129,7 +132,7 @@ export interface Task {
 
 export const TASK_PRIORITIES: TaskPriority[] = ["low", "normal", "high"];
 
-export type NotificationType = "task_assigned" | "deal_won" | "quote_accepted";
+export type NotificationType = "task_assigned" | "deal_won" | "quote_accepted" | "invoice_paid" | "deal_rotten";
 
 export interface Notification {
   id: string;
@@ -150,6 +153,8 @@ export const NOTIFICATION_TYPE_META: { type: NotificationType; label: string; de
   { type: "task_assigned", label: "Task assigned to me", description: "When a task is assigned to you." },
   { type: "deal_won", label: "Deal won", description: "When one of your deals is marked won." },
   { type: "quote_accepted", label: "Quotation accepted", description: "When one of your quotes is accepted." },
+  { type: "invoice_paid", label: "Invoice paid", description: "When a payment is received on one of your invoices." },
+  { type: "deal_rotten", label: "Deal going stale", description: "When one of your deals sits past its stage's staleness threshold." },
 ];
 
 export interface NotificationPreference {
@@ -391,16 +396,17 @@ export interface Communication {
   clicked_at: string | null;
   owner_id: string | null;
   created_at: string;
+  is_read: boolean;
 }
 
 // ---- Integration settings (per-tenant provider config) ----------------------
-export type IntegrationChannel = "email" | "whatsapp" | "sms" | "whatsapp_device";
-export const INTEGRATION_CHANNELS: IntegrationChannel[] = ["email", "whatsapp", "sms", "whatsapp_device"];
+export type IntegrationChannel = "email" | "whatsapp" | "sms" | "whatsapp_device" | "razorpay";
+export const INTEGRATION_CHANNELS: IntegrationChannel[] = ["email", "whatsapp", "sms", "whatsapp_device", "razorpay"];
 
 /**
  * Non-secret view of a tenant's integration config. Secret columns
- * (api_key / access_token) are intentionally absent — they must never be fetched
- * client-side. Use `secret_set` / `secret_last4` to show configured status.
+ * (api_key / access_token / webhook_secret) are intentionally absent — they must never
+ * be fetched client-side. Use `secret_set` / `secret_last4` to show configured status.
  */
 export interface IntegrationSetting {
   id: string;
@@ -412,9 +418,33 @@ export interface IntegrationSetting {
   business_account_id: string | null;
   sms_sender_id: string | null;
   api_endpoint: string | null;
+  razorpay_key_id: string | null;
   secret_set: boolean;
   secret_last4: string | null;
   app_secret_set: boolean;
+}
+
+// ---- Payments (Razorpay Payment Links) ---------------------------------------
+export type PaymentProvider = "razorpay";
+export type PaymentLinkStatus = "created" | "paid" | "failed" | "cancelled" | "expired";
+
+export interface Payment {
+  id: string;
+  tenant_id: string;
+  invoice_id: string;
+  provider: PaymentProvider;
+  amount: number;
+  currency: string;
+  method: string | null;
+  status: PaymentLinkStatus;
+  razorpay_payment_link_id: string | null;
+  razorpay_payment_id: string | null;
+  short_url: string | null;
+  failure_reason: string | null;
+  paid_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // ---- Meta (Facebook/Instagram) Lead Ads (0023) ------------------------------
@@ -465,6 +495,12 @@ export interface TimelineItem {
   text: string;
   meta?: string | null;
   at: string;
+  call?: {
+    direction: string | null;
+    outcome: string | null;
+    duration_minutes: number | null;
+    notes: string | null;
+  };
 }
 
 // ---- Custom fields (metadata-driven) ----------------------------------------
@@ -574,4 +610,149 @@ export interface WorkflowRunLog {
   status: "success" | "error";
   detail: Record<string, unknown> | null;
   created_at: string;
+}
+
+// ---- Lead Routing -------------------------------------------------------------
+export type RoutingStrategy = "round_robin" | "specific" | "load";
+
+export interface RoutingCondition {
+  field: string;
+  operator: ConditionOperator;
+  value: string;
+}
+
+export interface RoutingRule {
+  id: string;
+  tenant_id: string;
+  name: string;
+  priority: number;
+  conditions: RoutingCondition[];
+  strategy: RoutingStrategy;
+  target_user_ids: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---- Bulk Email Campaigns -------------------------------------------------------
+export type CampaignAudience = "leads" | "contacts";
+export type CampaignStatus = "draft" | "sending" | "sent" | "failed";
+
+export interface EmailCampaign {
+  id: string;
+  tenant_id: string;
+  name: string;
+  subject: string;
+  body: string;
+  audience: CampaignAudience;
+  conditions: RoutingCondition[];
+  status: CampaignStatus;
+  recipient_count: number;
+  sent_count: number;
+  failed_count: number;
+  owner_id: string;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+// ---- Sales Sequences -----------------------------------------------------------
+export type SequenceChannel = "email" | "whatsapp" | "task";
+export type SequenceEnrollmentStatus = "active" | "stopped" | "completed";
+
+export interface Sequence {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  owner_id: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface SequenceStepContent {
+  subject?: string;
+  body?: string;
+  title?: string;
+}
+
+export interface SequenceStep {
+  id: string;
+  tenant_id: string;
+  sequence_id: string;
+  step_order: number;
+  channel: SequenceChannel;
+  delay_hours: number;
+  content: SequenceStepContent;
+  created_at: string;
+}
+
+// ---- Report Schedules ---------------------------------------------------------------
+export type ReportDateRange = "last_7_days" | "last_30_days" | "this_month" | "last_month" | "all_time";
+export type ReportCadence = "daily" | "weekly" | "monthly";
+
+export interface ReportSchedule {
+  id: string;
+  tenant_id: string;
+  name: string;
+  report_type: ReportType;
+  filters: Record<string, string>;
+  date_range: ReportDateRange;
+  cadence: ReportCadence;
+  recipient_emails: string[];
+  is_active: boolean;
+  last_sent_at: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+// ---- Sales Targets ----------------------------------------------------------------
+export type TargetMetric = "revenue" | "deals_won";
+
+export interface SalesTarget {
+  id: string;
+  tenant_id: string;
+  user_id: string | null; // null = whole-tenant target
+  period: string; // 'YYYY-MM'
+  metric: TargetMetric;
+  target_value: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---- Lead Scoring ---------------------------------------------------------------
+export interface LeadScoringRule {
+  tenant_id: string;
+  action: string;
+  points: number;
+  is_active: boolean;
+  updated_at: string;
+}
+
+export interface LeadScoreEvent {
+  id: string;
+  tenant_id: string;
+  lead_id: string;
+  action: string;
+  points: number;
+  created_at: string;
+}
+
+export interface SequenceEnrollment {
+  id: string;
+  tenant_id: string;
+  sequence_id: string;
+  lead_id: string;
+  current_step: number;
+  status: SequenceEnrollmentStatus;
+  stop_reason: string | null;
+  last_error: string | null;
+  next_run_at: string;
+  enrolled_by: string;
+  enrolled_at: string;
+  updated_at: string;
+  sequences?: { name: string } | null;
 }
