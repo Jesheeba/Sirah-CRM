@@ -59,6 +59,38 @@ export default function ConversationThread({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId]);
 
+  // Live updates for this contact's thread. postgres_changes only supports one filter
+  // column, so we filter on related_to_id here (most selective) and check
+  // related_to_type/channel client-side. RLS (comm_read) already scopes this to the
+  // signed-in user's own tenant — no manual tenant_id filter needed.
+  useEffect(() => {
+    const rtChannel = supabase
+      .channel(`contact-thread-${contactId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "communications", filter: `related_to_id=eq.${contactId}` },
+        (payload) => {
+          const row = payload.new as Communication;
+          if (row.related_to_type !== "contact" || !["email", "whatsapp"].includes(row.channel)) return;
+          setItems((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "communications", filter: `related_to_id=eq.${contactId}` },
+        (payload) => {
+          const row = payload.new as Communication;
+          if (row.related_to_type !== "contact" || !["email", "whatsapp"].includes(row.channel)) return;
+          setItems((prev) => prev.map((m) => (m.id === row.id ? row : m)));
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(rtChannel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contactId]);
+
   const canEmail = !!contactEmail;
   const canWhatsapp = !!contactPhone;
 

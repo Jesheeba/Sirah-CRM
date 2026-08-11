@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Communication, EmailTemplate } from "@/lib/types";
 import WhatsAppComposer, { type WaPrefill } from "./WhatsAppComposer";
 import { sendWhatsApp } from "@/app/(app)/whatsapp/actions";
+import { createClient } from "@/lib/supabase/client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -94,7 +95,45 @@ export default function WhatsAppClient({
   const [search, setSearch] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const conversations = groupByPhone(initial);
+  // Seeded from the server-rendered `initial` prop, then kept live by the realtime
+  // subscription below. Re-synced whenever `initial` itself changes (router.refresh()
+  // after sending a reply still works exactly as before — this doesn't replace that).
+  const [items, setItems] = useState<Communication[]>(initial);
+  useEffect(() => {
+    setItems(initial);
+  }, [initial]);
+
+  // Live inbound/status updates. RLS on `communications` (comm_read: tenant_id =
+  // current_tenant_id()) scopes this to the signed-in user's own tenant automatically —
+  // Realtime only broadcasts a row change to clients whose session can read that row, so
+  // no manual tenant_id filter is needed here. `channel=eq.whatsapp` narrows out email/sms.
+  useEffect(() => {
+    const supabase = createClient();
+    const rtChannel = supabase
+      .channel("whatsapp-inbox")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "communications", filter: "channel=eq.whatsapp" },
+        (payload) => {
+          const row = payload.new as Communication;
+          setItems((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "communications", filter: "channel=eq.whatsapp" },
+        (payload) => {
+          const row = payload.new as Communication;
+          setItems((prev) => prev.map((m) => (m.id === row.id ? row : m)));
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(rtChannel);
+    };
+  }, []);
+
+  const conversations = groupByPhone(items);
   const q = search.trim().toLowerCase();
   const filtered = q
     ? conversations.filter(
@@ -111,7 +150,7 @@ export default function WhatsAppClient({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [selected, initial.length]);
+  }, [selected, items.length]);
 
   async function sendReply() {
     if (!selected || !replyBody.trim()) return;
