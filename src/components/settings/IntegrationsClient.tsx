@@ -254,8 +254,16 @@ function WhatsAppCloudCard({
   // Capture waba_id + phone_number_id from the Embedded Signup popup message.
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      // Log ALL messages so we can see what origin Facebook actually uses.
-      console.log("[WA Signup] message origin:", event.origin, "data:", event.data);
+      // RAW, unconditional — every message this window receives, before ANY filtering
+      // or parsing. Do not add an early return above this line: this is what lets us
+      // see whether WA_EMBEDDED_SIGNUP arrives at all (even from an unexpected origin
+      // or in an unexpected shape) versus never being sent by Meta in the first place.
+      console.log("[WA Signup] RAW:", {
+        origin: event.origin,
+        dataType: typeof event.data,
+        data: event.data,
+      });
+
       // Matches Meta's documented check (any facebook.com subdomain), not just the two
       // origins previously hardcoded — those were narrower than what Meta actually uses.
       if (!event.origin.endsWith("facebook.com")) return;
