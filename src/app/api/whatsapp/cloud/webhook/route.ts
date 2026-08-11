@@ -122,9 +122,13 @@ export async function POST(req: NextRequest) {
       const body = msg.text?.body ?? msg.caption ?? "";
 
       if (isOptOutMessage(body)) {
-        await admin
+        const { error: optOutErr } = await admin
           .from("whatsapp_optouts")
           .upsert({ tenant_id: tenantId, phone: senderPhone }, { onConflict: "tenant_id,phone" });
+        if (optOutErr) {
+          console.error("[WA Webhook] opt-out upsert failed:", optOutErr.message, { tenantId, senderPhone });
+          // Non-fatal — the inbound message itself still gets recorded below.
+        }
       }
 
       let relatedToType: string | null = null;
@@ -155,7 +159,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      await admin.from("communications").insert({
+      const { error: insertErr } = await admin.from("communications").insert({
         tenant_id: tenantId,
         channel: "whatsapp",
         provider: "whatsapp_cloud",
@@ -168,6 +172,22 @@ export async function POST(req: NextRequest) {
         related_to_id: relatedToId,
         is_read: false,
       });
+
+      if (insertErr) {
+        // Distinct, greppable line — an inbound message failed to persist. This exact
+        // failure mode (insert silently swallowed, webhook still 200'd to Meta so it
+        // never retried) is what caused messages to go missing before — never let that
+        // happen silently again. Return 500 so Meta redelivers; the idempotency check
+        // above makes a retry safe even if other messages in this same payload already
+        // succeeded.
+        console.error("[WA Webhook] ALERT: inbound message insert failed — message NOT saved", {
+          tenantId,
+          providerMessageId: msg.id,
+          error: insertErr.message,
+          code: insertErr.code,
+        });
+        return NextResponse.json({ error: "insert_failed" }, { status: 500 });
+      }
     }
 
     // ── Delivery / read status receipts ───────────────────────────────────────
@@ -176,7 +196,7 @@ export async function POST(req: NextRequest) {
       const mapped = STATUS_MAP[s.status];
       if (!mapped) continue;
 
-      await admin
+      const { error: statusErr } = await admin
         .from("communications")
         .update({
           status: mapped,
@@ -185,6 +205,16 @@ export async function POST(req: NextRequest) {
         .eq("provider_message_id", s.id)
         .eq("tenant_id", tenantId)
         .eq("provider", "whatsapp_cloud");
+
+      if (statusErr) {
+        console.error("[WA Webhook] delivery-status update failed:", statusErr.message, {
+          tenantId,
+          providerMessageId: s.id,
+          mapped,
+        });
+        // Non-fatal — a missed status receipt (sent/delivered/read) doesn't lose the
+        // message itself, unlike a failed inbound insert. Don't fail the whole webhook.
+      }
     }
   } catch {
     // Always 200 — Meta retries on non-200 responses.
