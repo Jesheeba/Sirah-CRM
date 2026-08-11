@@ -70,13 +70,32 @@ export async function POST(req: NextRequest) {
     const admin = createAdminClient();
 
     // Resolve tenant by phone_id — app_secret verified globally above, not needed per-row.
-    const { data: settings } = await admin
+    // Deterministic ordering: if more than one enabled row ever shares a phone_id again
+    // (it has happened — two tenants' WABAs ended up on the same phone_id during earlier
+    // Embedded Signup testing), always take the oldest connection rather than whatever
+    // order Postgres happens to return, and log it loudly so it gets noticed and fixed
+    // rather than silently resolving to a possibly-wrong tenant.
+    const { data: settings, error: settingsErr } = await admin
       .from("integration_settings")
       .select("tenant_id")
       .eq("phone_id", phoneNumberId)
       .eq("channel", "whatsapp")
       .eq("is_enabled", true)
+      .order("created_at", { ascending: true })
       .limit(1);
+
+    if (settingsErr) {
+      console.error("[WA Webhook] tenant lookup failed:", settingsErr.message);
+      return NextResponse.json({ received: true });
+    }
+
+    if ((settings?.length ?? 0) > 1) {
+      console.warn(
+        `[WA Webhook] ALERT: phone_id ${phoneNumberId} matches ${settings!.length} enabled ` +
+          "integration_settings rows — tenant resolution is ambiguous. Resolving to the " +
+          "oldest connection; disable the stale one(s) in Settings > Integrations.",
+      );
+    }
 
     const setting = settings?.[0] ?? null;
     if (!setting) {
