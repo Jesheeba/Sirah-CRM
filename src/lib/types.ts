@@ -424,6 +424,35 @@ export interface IntegrationSetting {
   app_secret_set: boolean;
 }
 
+// ---- WhatsApp Business message templates (Tech Provider capability) ---------
+export type WhatsAppTemplateStatus = "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "PAUSED" | "DISABLED";
+export const WHATSAPP_TEMPLATE_STATUSES: WhatsAppTemplateStatus[] = [
+  "DRAFT",
+  "PENDING",
+  "APPROVED",
+  "REJECTED",
+  "PAUSED",
+  "DISABLED",
+];
+
+export interface WhatsAppTemplate {
+  id: string;
+  tenant_id: string;
+  waba_id: string;
+  meta_template_id: string | null;
+  name: string;
+  language: string;
+  category: string;
+  components: import("./whatsapp-template-validator").TemplateComponent[];
+  status: WhatsAppTemplateStatus;
+  rejection_reason: string | null;
+  quality_score: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  owner_id: string | null;
+  created_at: string;
+}
+
 // ---- Payments (Razorpay Payment Links) ---------------------------------------
 export type PaymentProvider = "razorpay";
 export type PaymentLinkStatus = "created" | "paid" | "failed" | "cancelled" | "expired";

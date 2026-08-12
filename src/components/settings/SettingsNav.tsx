@@ -16,6 +16,7 @@ const ITEMS = [
   { href: "/settings/custom-fields", label: "Custom Fields" },
   { href: "/settings/workflows", label: "Workflows" },
   { href: "/settings/integrations", label: "Integrations" },
+  { href: "/settings/whatsapp-templates", label: "WhatsApp Templates" },
 ];
 
 export default function SettingsNav() {

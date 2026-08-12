@@ -7,7 +7,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveEmailConfig, resolveWhatsAppConfig, formatFrom } from "@/lib/integrations";
 import { bodyToTrackedHtml, mergeTemplate } from "@/lib/email";
-import { normalizePhone } from "@/lib/whatsapp";
+import { normalizePhone, WHATSAPP_GRAPH } from "@/lib/whatsapp";
 
 export interface RunContext {
   action_id: string;
@@ -172,7 +172,7 @@ async function execSendWhatsApp(ctx: RunContext): Promise<ActionResult> {
         body: JSON.stringify({ token: cfg.accessToken, to: phone, body }),
       });
     } else {
-      res = await fetch(`https://graph.facebook.com/v22.0/${cfg.phoneId}/messages`, {
+      res = await fetch(`https://graph.facebook.com/${WHATSAPP_GRAPH}/${cfg.phoneId}/messages`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${cfg.accessToken}`,

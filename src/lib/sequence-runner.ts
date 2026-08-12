@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveEmailConfig, resolveWhatsAppConfig, formatFrom } from "@/lib/integrations";
 import { bodyToTrackedHtml, mergeTemplate } from "@/lib/email";
-import { normalizePhone } from "@/lib/whatsapp";
+import { normalizePhone, WHATSAPP_GRAPH } from "@/lib/whatsapp";
 
 const BATCH_SIZE = 100;
 
@@ -165,7 +165,7 @@ async function runWhatsAppStep(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token: cfg.accessToken, to: phone, body }),
         })
-      : await fetch(`https://graph.facebook.com/v22.0/${cfg.phoneId}/messages`, {
+      : await fetch(`https://graph.facebook.com/${WHATSAPP_GRAPH}/${cfg.phoneId}/messages`, {
           method: "POST",
           headers: { Authorization: `Bearer ${cfg.accessToken}`, "Content-Type": "application/json" },
           body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "text", text: { body } }),

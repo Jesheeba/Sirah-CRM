@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getUserContext } from "@/lib/auth";
-import { normalizePhone, waMeUrl } from "@/lib/whatsapp";
+import { normalizePhone, waMeUrl, WHATSAPP_GRAPH } from "@/lib/whatsapp";
 import { resolveWhatsAppConfig } from "@/lib/integrations";
 import type { CommRelatedType } from "@/lib/types";
 
@@ -140,7 +140,7 @@ export async function sendTemplate(input: SendTemplateInput): Promise<SendWhatsA
   if (insErr || !row) return { ok: false, error: insErr?.message ?? "Could not log message." };
 
   try {
-    const res = await fetch(`https://graph.facebook.com/v22.0/${cfg.phoneId}/messages`, {
+    const res = await fetch(`https://graph.facebook.com/${WHATSAPP_GRAPH}/${cfg.phoneId}/messages`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${cfg.accessToken}`,
@@ -192,7 +192,7 @@ async function sendViaCloudApi(
   phoneId: string,
   accessToken: string,
 ): Promise<SendWhatsAppResult> {
-  const res = await fetch(`https://graph.facebook.com/v22.0/${phoneId}/messages`, {
+  const res = await fetch(`https://graph.facebook.com/${WHATSAPP_GRAPH}/${phoneId}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,

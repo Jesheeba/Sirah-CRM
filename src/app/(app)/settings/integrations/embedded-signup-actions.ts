@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getUserContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchMetaUserId } from "@/lib/meta";
+import { WHATSAPP_GRAPH } from "@/lib/whatsapp";
 
 export interface ConnectWhatsAppInput {
   code: string;
@@ -43,7 +44,7 @@ export async function connectWhatsAppEmbedded(
   }
 
   // ── Step 1: Exchange the short-lived code for an access token ─────────────
-  const tokenUrl = new URL("https://graph.facebook.com/v22.0/oauth/access_token");
+  const tokenUrl = new URL(`https://graph.facebook.com/${WHATSAPP_GRAPH}/oauth/access_token`);
   tokenUrl.searchParams.set("client_id", appId);
   tokenUrl.searchParams.set("client_secret", appSecret);
   tokenUrl.searchParams.set("code", input.code);
@@ -73,7 +74,7 @@ export async function connectWhatsAppEmbedded(
   // back to looking it up directly rather than failing the whole connect.
   let phoneNumberId = input.phone_number_id;
   if (!phoneNumberId) {
-    const phonesUrl = `https://graph.facebook.com/v22.0/${input.waba_id}/phone_numbers`;
+    const phonesUrl = `https://graph.facebook.com/${WHATSAPP_GRAPH}/${input.waba_id}/phone_numbers`;
     const phonesRes = await fetch(phonesUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -94,7 +95,7 @@ export async function connectWhatsAppEmbedded(
 
   // ── Step 2: Subscribe the WABA to this app's webhook (non-fatal) ──────────
   try {
-    await fetch(`https://graph.facebook.com/v22.0/${input.waba_id}/subscribed_apps`, {
+    await fetch(`https://graph.facebook.com/${WHATSAPP_GRAPH}/${input.waba_id}/subscribed_apps`, {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -106,7 +107,7 @@ export async function connectWhatsAppEmbedded(
   // For Embedded Signup the phone may already be registered; errors are non-fatal.
   try {
     const pin = String(Math.floor(100000 + Math.random() * 900000));
-    await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/register`, {
+    await fetch(`https://graph.facebook.com/${WHATSAPP_GRAPH}/${phoneNumberId}/register`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,

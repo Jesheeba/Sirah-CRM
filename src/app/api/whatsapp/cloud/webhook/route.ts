@@ -60,14 +60,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    // phone_number_id is how we route to the correct tenant.
+    const admin = createAdminClient();
+
+    // ── Template status / quality updates ─────────────────────────────────────
+    // These arrive on a WABA-scoped entry (entry.id = business_account_id), not the
+    // phone-number-scoped entry the rest of this handler assumes — handle them in
+    // their own pass over every entry/change rather than just entry[0].changes[0].
+    for (const entry of parsed.entry ?? []) {
+      for (const change of entry.changes ?? []) {
+        if (change.field === "message_template_status_update" || change.field === "message_template_quality_update") {
+          await handleTemplateEvent(admin, entry.id, change.field, change.value as unknown as TemplateEventValue);
+        }
+      }
+    }
+
+    // phone_number_id is how we route to the correct tenant for message/status events.
     const phoneNumberId =
       parsed.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
     if (!phoneNumberId) {
       return NextResponse.json({ received: true });
     }
-
-    const admin = createAdminClient();
 
     // Resolve tenant by phone_id — app_secret verified globally above, not needed per-row.
     // Deterministic ordering: if more than one enabled row ever shares a phone_id again
@@ -223,7 +235,72 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
+// ── Template status / quality events ──────────────────────────────────────────
+
+const TEMPLATE_STATUS_EVENTS = new Set(["APPROVED", "REJECTED", "PENDING", "PAUSED", "DISABLED"]);
+
+/**
+ * Updates the local whatsapp_templates row for a message_template_status_update or
+ * message_template_quality_update webhook event, keyed on waba_id + name + language
+ * (the row already carries its own waba_id, so no separate tenant lookup is needed).
+ *
+ * PAUSED and DISABLED arrive here too, long after APPROVED — a client's template dying
+ * mid-campaign must be surfaced (status flips, visible in the template list), not
+ * swallowed the way an unmatched row or transient error silently would be.
+ */
+async function handleTemplateEvent(
+  admin: ReturnType<typeof createAdminClient>,
+  wabaId: string | undefined,
+  field: string,
+  value: TemplateEventValue | undefined,
+) {
+  const name = value?.message_template_name;
+  const language = value?.message_template_language;
+  if (!wabaId || !name || !language) return;
+
+  const updates: Record<string, unknown> = { reviewed_at: new Date().toISOString() };
+
+  if (field === "message_template_status_update") {
+    const event = value?.event;
+    if (!event || !TEMPLATE_STATUS_EVENTS.has(event)) {
+      // Meta also emits FLAGGED / IN_APPEAL / PENDING_DELETION / REINSTATED / etc. —
+      // log rather than silently drop so an unrecognized transition leaves a trace.
+      console.warn(
+        `[WA Webhook] Unhandled template status event "${event}" for waba ${wabaId} ${name}/${language}`,
+      );
+      return;
+    }
+    updates.status = event;
+    updates.rejection_reason = event === "REJECTED" ? (value?.reason ?? null) : null;
+    if (value?.message_template_id != null) updates.meta_template_id = String(value.message_template_id);
+  } else {
+    if (!value?.new_quality_score) return;
+    updates.quality_score = value.new_quality_score;
+  }
+
+  const { error } = await admin
+    .from("whatsapp_templates")
+    .update(updates)
+    .eq("waba_id", wabaId)
+    .eq("name", name)
+    .eq("language", language);
+
+  if (error) {
+    console.error("[WA Webhook] template event update failed:", error.message, { wabaId, name, language, field });
+  }
+}
+
 // ── Meta webhook payload types ────────────────────────────────────────────────
+
+interface TemplateEventValue {
+  event?: string;
+  message_template_id?: number | string;
+  message_template_name?: string;
+  message_template_language?: string;
+  reason?: string | null;
+  previous_quality_score?: string;
+  new_quality_score?: string;
+}
 
 interface MetaWebhookValue {
   metadata?: {

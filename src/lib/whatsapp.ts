@@ -1,6 +1,9 @@
 // WhatsApp helpers. Status styling and {{variable}} merging are shared with email
 // (see lib/email.ts) since both use the channel-aware `communications` log.
 
+/** Pinned WhatsApp Cloud API / Business Management API Graph version (one place to bump). */
+export const WHATSAPP_GRAPH = "v22.0";
+
 /** Digits-only E.164 form (no '+'), as wa.me and the Cloud API expect. */
 export function normalizePhone(raw: string | null | undefined): string {
   return (raw ?? "").replace(/[^\d]/g, "");

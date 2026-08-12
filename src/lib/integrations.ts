@@ -30,6 +30,8 @@ export interface WhatsAppConfig {
   accessToken: string | null;
   /** Device provider base URL (e.g. https://api.ultramsg.com). Only set when mode=tenant_device. */
   apiEndpoint?: string | null;
+  /** Meta WhatsApp Business Account id. Only set when mode=tenant_cloud (template management needs it). */
+  wabaId?: string | null;
 }
 
 export async function resolveEmailConfig(tenantId: string | null): Promise<EmailConfig> {
@@ -73,13 +75,18 @@ export async function resolveWhatsAppConfig(
     // Check official Cloud API first (preferred)
     const { data: cloud } = await admin
       .from("integration_settings")
-      .select("is_enabled, phone_id, access_token")
+      .select("is_enabled, phone_id, access_token, business_account_id")
       .eq("tenant_id", tenantId) // MANDATORY: service role bypasses RLS.
       .eq("channel", "whatsapp")
       .maybeSingle();
 
     if (cloud?.is_enabled && cloud.access_token && cloud.phone_id) {
-      return { mode: "tenant_cloud", phoneId: cloud.phone_id, accessToken: cloud.access_token };
+      return {
+        mode: "tenant_cloud",
+        phoneId: cloud.phone_id,
+        accessToken: cloud.access_token,
+        wabaId: cloud.business_account_id ?? null,
+      };
     }
 
     // Fall back to device-based provider
