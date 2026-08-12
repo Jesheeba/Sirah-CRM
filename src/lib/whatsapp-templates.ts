@@ -55,9 +55,11 @@ export async function createMetaTemplate(
 ): Promise<MetaTemplateResult> {
   const json = await metaFetch(`${wabaId}/message_templates`, accessToken, {
     method: "POST",
+    // parameter_format: "named" (lowercase — confirmed against Meta's own docs) tells
+    // Meta to parse {{customer_name}} tokens instead of assuming positional {{1}}.
     // Meta reclassifies templates it disagrees with (e.g. MARKETING content filed as
-    // UTILITY) — without this flag it rejects the submission outright instead.
-    body: JSON.stringify({ ...payload, allow_category_change: true }),
+    // UTILITY) — without allow_category_change it rejects the submission outright instead.
+    body: JSON.stringify({ ...payload, parameter_format: "named", allow_category_change: true }),
   });
   return { id: String(json.id ?? ""), status: json.status as string | undefined, category: json.category as string | undefined };
 }
@@ -111,7 +113,11 @@ export async function editMetaTemplate(
 ): Promise<void> {
   await metaFetch(metaTemplateId, accessToken, {
     method: "POST",
-    body: JSON.stringify({ ...payload, allow_category_change: true }),
+    // Meta's docs don't explicitly say parameter_format must be re-sent on edit (it may
+    // be immutable after creation), but every template this app creates now uses named
+    // params — including it here too is the conservative choice against a silent
+    // fallback-to-positional misparse of the edited {{name}} tokens.
+    body: JSON.stringify({ ...payload, parameter_format: "named", allow_category_change: true }),
   });
 }
 

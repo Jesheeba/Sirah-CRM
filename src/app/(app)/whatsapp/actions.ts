@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getUserContext } from "@/lib/auth";
 import { normalizePhone, waMeUrl, WHATSAPP_GRAPH } from "@/lib/whatsapp";
+import type { SendTemplateComponent } from "@/lib/whatsapp-template-validator";
 import { resolveWhatsAppConfig } from "@/lib/integrations";
 import type { CommRelatedType } from "@/lib/types";
 
@@ -97,7 +98,10 @@ export interface SendTemplateInput {
   to_name?: string | null;
   templateName: string;
   languageCode: string;
-  components?: unknown[];
+  /** Named-parameter components — {type, parameter_name, text} per variable, per Meta's
+   *  current API (Meta moved off positional {{1}} parameters). Omit for a template with
+   *  no variables (e.g. the built-in "hello_world" sample). */
+  components?: SendTemplateComponent[];
   related_to_type?: CommRelatedType | null;
   related_to_id?: string | null;
   quotation_id?: string | null;

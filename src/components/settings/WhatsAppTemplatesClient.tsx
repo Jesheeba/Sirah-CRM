@@ -66,7 +66,8 @@ interface FormState {
   headerText: string;
   headerExample: string;
   bodyText: string;
-  bodyExamples: string[];
+  /** Example values keyed by parameter name (e.g. "customer_name" → "Asha"). */
+  bodyExamples: Record<string, string>;
   footerText: string;
   buttons: TemplateButton[];
 }
@@ -79,7 +80,7 @@ const BLANK: FormState = {
   headerText: "",
   headerExample: "",
   bodyText: "",
-  bodyExamples: [],
+  bodyExamples: {},
   footerText: "",
   buttons: [],
 };
@@ -94,7 +95,7 @@ function buildComponents(form: FormState): TemplateComponent[] {
       format: "TEXT",
       text: form.headerText.trim(),
       ...(vars.length > 0 && form.headerExample.trim()
-        ? { example: { header_text: [form.headerExample.trim()] } }
+        ? { example: { header_text_named_params: [{ param_name: vars[0], example: form.headerExample.trim() }] } }
         : {}),
     });
   } else if (form.headerFormat !== "NONE" && form.headerFormat !== "TEXT") {
@@ -106,7 +107,11 @@ function buildComponents(form: FormState): TemplateComponent[] {
     type: "BODY",
     text: form.bodyText,
     ...(bodyVars.length > 0
-      ? { example: { body_text: [bodyVars.map((_, i) => form.bodyExamples[i] ?? "")] } }
+      ? {
+          example: {
+            body_text_named_params: bodyVars.map((name) => ({ param_name: name, example: form.bodyExamples[name] ?? "" })),
+          },
+        }
       : {}),
   });
 
@@ -127,12 +132,15 @@ function parseComponents(components: TemplateComponent[]): Partial<FormState> {
   const footer = components.find((c): c is Extract<TemplateComponent, { type: "FOOTER" }> => c.type === "FOOTER");
   const buttons = components.find((c): c is Extract<TemplateComponent, { type: "BUTTONS" }> => c.type === "BUTTONS");
 
+  const bodyExamples: Record<string, string> = {};
+  for (const p of body?.example?.body_text_named_params ?? []) bodyExamples[p.param_name] = p.example;
+
   return {
     headerFormat: (header?.format as HeaderFormat) ?? "NONE",
     headerText: header?.format === "TEXT" ? header.text ?? "" : "",
-    headerExample: header?.example?.header_text?.[0] ?? "",
+    headerExample: header?.example?.header_text_named_params?.[0]?.example ?? "",
     bodyText: body?.text ?? "",
-    bodyExamples: body?.example?.body_text?.[0] ?? [],
+    bodyExamples,
     footerText: footer?.text ?? "",
     buttons: buttons?.buttons ?? [],
   };
@@ -182,7 +190,7 @@ export default function WhatsAppTemplatesClient({
       headerText: "",
       headerExample: "",
       bodyText: "",
-      bodyExamples: [],
+      bodyExamples: {},
       footerText: "",
       buttons: [],
       ...parsed,
@@ -396,14 +404,14 @@ export default function WhatsAppTemplatesClient({
                   <input
                     value={form.headerText}
                     onChange={(e) => setForm({ ...form, headerText: e.target.value })}
-                    placeholder="Header text — at most one {{1}} variable"
+                    placeholder="Header text — at most one {{variable_name}}"
                     className={INPUT}
                   />
                   {headerVars.length > 0 && (
                     <input
                       value={form.headerExample}
                       onChange={(e) => setForm({ ...form, headerExample: e.target.value })}
-                      placeholder="Example value for {{1}}"
+                      placeholder={`Example value for {{${headerVars[0]}}}`}
                       className={INPUT}
                     />
                   )}
@@ -417,21 +425,19 @@ export default function WhatsAppTemplatesClient({
                 value={form.bodyText}
                 onChange={(e) => setForm({ ...form, bodyText: e.target.value })}
                 rows={5}
-                placeholder={"Hi {{1}}, your order {{2}} has shipped."}
+                placeholder={"Hi {{customer_name}}, your order {{order_number}} has shipped."}
                 className={INPUT}
               />
               {bodyVars.length > 0 && (
                 <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {bodyVars.map((v, i) => (
+                  {bodyVars.map((name) => (
                     <input
-                      key={v}
-                      value={form.bodyExamples[i] ?? ""}
-                      onChange={(e) => {
-                        const next = [...form.bodyExamples];
-                        next[i] = e.target.value;
-                        setForm({ ...form, bodyExamples: next });
-                      }}
-                      placeholder={`Example for {{${v}}}`}
+                      key={name}
+                      value={form.bodyExamples[name] ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, bodyExamples: { ...form.bodyExamples, [name]: e.target.value } })
+                      }
+                      placeholder={`Example for {{${name}}}`}
                       className={INPUT + " mt-0"}
                     />
                   ))}
@@ -480,18 +486,25 @@ export default function WhatsAppTemplatesClient({
                       <input
                         value={b.url ?? ""}
                         onChange={(e) => updateButton(i, { url: e.target.value })}
-                        placeholder="https://example.com/{{1}}"
+                        placeholder="https://example.com/{{tracking_id}}"
                         className="min-w-[160px] flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
                       />
                     )}
-                    {b.type === "URL" && extractVariables(b.url ?? "").length > 0 && (
-                      <input
-                        value={b.example?.[0] ?? ""}
-                        onChange={(e) => updateButton(i, { example: [e.target.value] })}
-                        placeholder="Example for {{1}}"
-                        className="min-w-[140px] flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
-                      />
-                    )}
+                    {b.type === "URL" &&
+                      extractVariables(b.url ?? "").length > 0 &&
+                      (() => {
+                        const varName = extractVariables(b.url ?? "")[0];
+                        return (
+                          <input
+                            value={b.example?.example ?? ""}
+                            onChange={(e) =>
+                              updateButton(i, { example: { param_name: varName, example: e.target.value } })
+                            }
+                            placeholder={`Example for {{${varName}}}`}
+                            className="min-w-[140px] flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+                          />
+                        );
+                      })()}
                     {b.type === "PHONE_NUMBER" && (
                       <input
                         value={b.phone_number ?? ""}
@@ -603,8 +616,8 @@ export default function WhatsAppTemplatesClient({
   );
 }
 
-function fillVars(text: string, examples: string[]): string {
-  return text.replace(/\{\{\s*(\d+)\s*\}\}/g, (_, n) => examples[Number(n) - 1] || `{{${n}}}`);
+function fillVars(text: string, examples: Record<string, string>): string {
+  return text.replace(/\{\{\s*([^{}]*?)\s*\}\}/g, (m, name) => examples[name] || m);
 }
 
 function WhatsAppPreview({
@@ -620,15 +633,18 @@ function WhatsAppPreview({
   headerText: string;
   headerExample: string;
   bodyText: string;
-  bodyExamples: string[];
+  bodyExamples: Record<string, string>;
   footerText: string;
   buttons: TemplateButton[];
 }) {
+  const headerVarName = headerFormat === "TEXT" ? extractVariables(headerText)[0] : undefined;
   return (
     <div className="rounded-xl bg-[#e5ddd5] p-4">
       <div className="max-w-[280px] rounded-lg bg-[#dcf8c6] p-3 shadow-sm">
         {headerFormat === "TEXT" && headerText && (
-          <p className="mb-1 text-sm font-bold text-slate-800">{fillVars(headerText, [headerExample])}</p>
+          <p className="mb-1 text-sm font-bold text-slate-800">
+            {fillVars(headerText, headerVarName ? { [headerVarName]: headerExample } : {})}
+          </p>
         )}
         {headerFormat !== "NONE" && headerFormat !== "TEXT" && (
           <div className="mb-2 flex h-24 items-center justify-center rounded bg-slate-200 text-xs text-slate-500">

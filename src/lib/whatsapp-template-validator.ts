@@ -27,25 +27,32 @@ export const TEMPLATE_CATEGORIES: Array<{
   },
 ];
 
+/** A single named-parameter example, e.g. { param_name: "first_name", example: "Pablo" }. */
+export interface NamedParamExample {
+  param_name: string;
+  example: string;
+}
+
 export interface TemplateButton {
   type: "QUICK_REPLY" | "URL" | "PHONE_NUMBER";
   text: string;
   url?: string;
   phone_number?: string;
-  example?: string[];
+  /** At most one — Meta allows only one variable in a dynamic URL button. */
+  example?: NamedParamExample;
 }
 
 export interface TemplateHeaderComponent {
   type: "HEADER";
   format: "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
   text?: string;
-  example?: { header_text?: string[]; header_handle?: string[] };
+  example?: { header_text_named_params?: NamedParamExample[]; header_handle?: string[] };
 }
 
 export interface TemplateBodyComponent {
   type: "BODY";
   text: string;
-  example?: { body_text?: string[][] };
+  example?: { body_text_named_params?: NamedParamExample[] };
 }
 
 export interface TemplateFooterComponent {
@@ -72,23 +79,31 @@ export interface TemplateInput {
 }
 
 const NAME_RE = /^[a-z0-9_]+$/;
-const VAR_RE = /\{\{\s*(\d+)\s*\}\}/g;
+// Meta moved from positional {{1}} to named {{customer_name}} parameters — capture
+// whatever's between the braces (not just digits) so a malformed name still gets
+// caught and reported, rather than silently failing to match at all.
+const TOKEN_RE = /\{\{\s*([^{}]*?)\s*\}\}/g;
+// Meta's own rule: "Parameters using the named format must be unique, single strings,
+// composed of lowercase characters and underscores" (numbers are also accepted).
+const PARAM_NAME_RE = /^[a-z0-9_]+$/;
 
-/** Variable indices referenced in `text`, in the order Meta expects ({{1}}, {{2}}, …). */
-export function extractVariables(text: string): number[] {
-  const nums = new Set<number>();
-  for (const m of text.matchAll(VAR_RE)) nums.add(Number(m[1]));
-  return [...nums].sort((a, b) => a - b);
-}
-
-function isSequentialFromOne(nums: number[]): boolean {
-  if (nums.length === 0) return true;
-  return nums.every((n, i) => n === i + 1);
+/** Unique parameter names referenced in `text`, in first-occurrence order. */
+export function extractVariables(text: string): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const m of text.matchAll(TOKEN_RE)) {
+    const name = m[1];
+    if (!seen.has(name)) {
+      seen.add(name);
+      names.push(name);
+    }
+  }
+  return names;
 }
 
 function startsOrEndsWithVariable(text: string): boolean {
   const trimmed = text.trim();
-  return /^\{\{\s*\d+\s*\}\}/.test(trimmed) || /\{\{\s*\d+\s*\}\}$/.test(trimmed);
+  return /^\{\{[^{}]*\}\}/.test(trimmed) || /\{\{[^{}]*\}\}$/.test(trimmed);
 }
 
 export interface ValidationResult {
@@ -111,6 +126,14 @@ export function validateTemplate(input: TemplateInput): ValidationResult {
   if (!input.language.trim()) errors.push("Language is required.");
   if (!input.category) errors.push("Category is required.");
 
+  function checkParamNames(names: string[], where: string) {
+    for (const name of names) {
+      if (!PARAM_NAME_RE.test(name)) {
+        errors.push(`The variable "{{${name}}}" in the ${where} may only contain lowercase letters, numbers, and underscores.`);
+      }
+    }
+  }
+
   const body = input.components.find((c): c is TemplateBodyComponent => c.type === "BODY");
   if (!body || !body.text.trim()) {
     errors.push("Body text is required.");
@@ -119,13 +142,11 @@ export function validateTemplate(input: TemplateInput): ValidationResult {
       errors.push("Body text cannot start or end with a variable — Meta rejects this automatically.");
     }
     const vars = extractVariables(body.text);
-    if (!isSequentialFromOne(vars)) {
-      errors.push("Body variables must be sequential starting at {{1}} with no gaps (e.g. {{1}}, {{2}}, {{3}}).");
-    }
+    checkParamNames(vars, "body");
     if (vars.length > 0) {
-      const examples = body.example?.body_text?.[0] ?? [];
-      const missing = vars.some((_, i) => !examples[i]?.trim());
-      if (examples.length < vars.length || missing) {
+      const examples = body.example?.body_text_named_params ?? [];
+      const missing = vars.some((name) => !examples.find((e) => e.param_name === name)?.example?.trim());
+      if (missing) {
         errors.push("Every body variable needs an example value.");
       }
     }
@@ -134,11 +155,14 @@ export function validateTemplate(input: TemplateInput): ValidationResult {
   const header = input.components.find((c): c is TemplateHeaderComponent => c.type === "HEADER");
   if (header?.format === "TEXT" && header.text) {
     const vars = extractVariables(header.text);
+    checkParamNames(vars, "header");
     if (vars.length > 1) {
       errors.push("Header text supports at most one variable.");
     } else if (vars.length === 1) {
-      const example = header.example?.header_text?.[0];
-      if (!example?.trim()) errors.push("The header variable needs an example value.");
+      const example = header.example?.header_text_named_params?.[0];
+      if (!example || example.param_name !== vars[0] || !example.example?.trim()) {
+        errors.push("The header variable needs an example value.");
+      }
     }
   }
 
@@ -148,8 +172,9 @@ export function validateTemplate(input: TemplateInput): ValidationResult {
       if (!btn.url?.trim()) errors.push("URL buttons need a URL.");
       else {
         const vars = extractVariables(btn.url);
+        checkParamNames(vars, "button URL");
         if (vars.length > 1) errors.push("URL buttons support at most one variable.");
-        else if (vars.length === 1 && !btn.example?.[0]?.trim()) {
+        else if (vars.length === 1 && (!btn.example || btn.example.param_name !== vars[0] || !btn.example.example?.trim())) {
           errors.push("The URL button variable needs an example value.");
         }
       }
@@ -161,3 +186,38 @@ export function validateTemplate(input: TemplateInput): ValidationResult {
 
   return { valid: errors.length === 0, errors };
 }
+
+// ---- Send-time parameter shapes (POST /{phone-number-id}/messages) ----------
+// Meta's docs confirm these for BODY named parameters; HEADER is inferred by direct
+// analogy (same TextParameterObject shape reused across components in the send API —
+// not shown with its own named-format example in Meta's docs). BUTTONS/URL named
+// parameters aren't documented at all; kept consistent with body/header rather than
+// left positional, since parameter_format is declared once per template, not
+// per-component — flagged here for anyone verifying against a live send.
+export interface SendTemplateTextParameter {
+  type: "text";
+  parameter_name: string;
+  text: string;
+}
+
+export interface SendTemplateBodyComponent {
+  type: "body";
+  parameters: SendTemplateTextParameter[];
+}
+
+export interface SendTemplateHeaderComponent {
+  type: "header";
+  parameters: SendTemplateTextParameter[];
+}
+
+export interface SendTemplateButtonComponent {
+  type: "button";
+  sub_type: "url" | "quick_reply";
+  index: string;
+  parameters: SendTemplateTextParameter[];
+}
+
+export type SendTemplateComponent =
+  | SendTemplateBodyComponent
+  | SendTemplateHeaderComponent
+  | SendTemplateButtonComponent;
