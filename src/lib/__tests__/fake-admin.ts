@@ -9,9 +9,10 @@
 type Row = Record<string, unknown>;
 
 class FakeQuery implements PromiseLike<{ data: Row[] | Row | null; error: null; count?: number }> {
-  private op: "select" | "update" | "delete" | "insert" = "select";
+  private op: "select" | "update" | "delete" | "insert" | "upsert" = "select";
   private filtered: Row[];
   private values: Row | undefined;
+  private upsertConflict: string[] | undefined;
   private single = false;
   private head = false;
   private wantCount = false;
@@ -38,6 +39,13 @@ class FakeQuery implements PromiseLike<{ data: Row[] | Row | null; error: null; 
   insert(values: Row) {
     this.op = "insert";
     this.values = values;
+    return this;
+  }
+  /** Matches an existing row by the onConflict columns; updates it in place, else inserts. */
+  upsert(values: Row, opts?: { onConflict?: string }) {
+    this.op = "upsert";
+    this.values = values;
+    this.upsertConflict = (opts?.onConflict ?? "id").split(",");
     return this;
   }
   eq(col: string, val: unknown) {
@@ -83,6 +91,18 @@ class FakeQuery implements PromiseLike<{ data: Row[] | Row | null; error: null; 
         if (ids.has(this.rows[i].id)) this.rows.splice(i, 1);
       }
       result = { data: this.filtered, error: null, count: this.filtered.length };
+    } else if (this.op === "upsert") {
+      const cols = this.upsertConflict!;
+      const values = this.values as Row;
+      const existing = this.rows.find((r) => cols.every((c) => r[c] === values[c]));
+      if (existing) {
+        Object.assign(existing, values);
+        result = { data: [existing], error: null };
+      } else {
+        const row = { id: `gen-${this.rows.length + 1}-${Math.round(Math.random() * 1e6)}`, ...values };
+        this.rows.push(row);
+        result = { data: [row], error: null };
+      }
     } else {
       const row = { id: `gen-${this.rows.length + 1}-${Math.round(Math.random() * 1e6)}`, ...this.values };
       this.rows.push(row);

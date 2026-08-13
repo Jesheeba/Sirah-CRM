@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   deleteTemplate,
   editSubmittedTemplate,
@@ -153,11 +154,20 @@ export default function WhatsAppTemplatesClient({
   initial: WhatsAppTemplate[];
   wabaConnected: boolean;
 }) {
+  const router = useRouter();
   const [rows, setRows] = useState<WhatsAppTemplate[]>(initial);
   const [form, setForm] = useState<FormState>({ ...BLANK });
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [syncSummary, setSyncSummary] = useState<string | null>(null);
+
+  // router.refresh() (used after sync) re-fetches `initial` from the server without
+  // remounting this client component, so `rows` needs an explicit resync — otherwise
+  // the list would keep showing pre-sync data despite the successful refresh.
+  useEffect(() => {
+    setRows(initial);
+  }, [initial]);
 
   const editingRow = form.id ? rows.find((r) => r.id === form.id) : undefined;
   const isSubmittedEdit = Boolean(editingRow && editingRow.status !== "DRAFT");
@@ -268,10 +278,17 @@ export default function WhatsAppTemplatesClient({
   async function sync() {
     setBusy("sync");
     setError(null);
+    setSyncSummary(null);
     const res = await syncTemplates();
     setBusy(null);
     if (!res.ok) return setError(res.error ?? "Sync failed.");
-    window.location.reload();
+    const parts: string[] = [];
+    if (res.inserted) parts.push(res.inserted + " added");
+    if (res.updated) parts.push(res.updated + " updated");
+    if (res.orphaned) parts.push(res.orphaned + " orphaned");
+    if (res.skipped) parts.push(res.skipped + " draft" + (res.skipped === 1 ? "" : "s") + " skipped (name collision)");
+    setSyncSummary(parts.length > 0 ? "Synced: " + parts.join(", ") + "." : "Already up to date.");
+    router.refresh();
   }
 
   function updateButton(i: number, patch: Partial<TemplateButton>) {
@@ -330,6 +347,9 @@ export default function WhatsAppTemplatesClient({
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      {syncSummary && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{syncSummary}</div>
+      )}
 
       {editing && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">

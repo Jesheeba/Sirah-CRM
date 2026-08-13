@@ -22,6 +22,19 @@ export interface SaveResult {
   template?: WhatsAppTemplate;
 }
 
+export interface SyncResult {
+  ok: boolean;
+  error?: string;
+  /** New rows brought in from Meta that didn't exist locally. */
+  inserted?: number;
+  /** Existing rows whose status/category/components/quality were refreshed from Meta. */
+  updated?: number;
+  /** Previously-submitted local rows no longer found on Meta (see orphaned_at). */
+  orphaned?: number;
+  /** Local DRAFT rows left untouched despite a name+language collision with a remote template. */
+  skipped?: number;
+}
+
 export interface SaveDraftInput {
   id?: string;
   name: string;
@@ -273,15 +286,23 @@ export async function deleteTemplate(id: string): Promise<SaveResult> {
  * what the webhook delivers (events missed while the webhook was misconfigured), AND
  * brings in templates that exist on the WABA but were never created through this app
  * (e.g. Meta's own "hello_world" sample, or a client's pre-existing templates when
- * they're first onboarded — sync is how those become visible here at all).
+ * they're first onboarded — sync is how those become visible here at all). Meta's
+ * list endpoint is cursor-paginated (see listMetaTemplates), so this reconciles every
+ * template on the WABA, not just the first page.
  *
- *   - on Meta, no local row      → INSERT (upsert on tenant_id+name+language)
- *   - on Meta AND local          → UPDATE status/category/components/quality/rejection
+ *   - on Meta, no local row              → INSERT (upsert on tenant_id+name+language)
+ *   - on Meta AND local (non-DRAFT)      → UPDATE status/category/components/quality/rejection
+ *   - on Meta, local row is an           → SKIP — a same-name draft in progress isn't the
+ *     unsubmitted DRAFT                    same template lineage as whatever's on Meta; never
+ *                                          clobber drafted content that was never sent
  *   - local (submitted) but gone from Meta → mark orphaned_at, never delete — a
  *     client's history shouldn't silently vanish because someone deleted it in
  *     WhatsApp Manager. DRAFT rows are excluded: they were never on Meta to begin with.
+ *
+ * Components (including older WABAs still on numbered {{1}} parameters) are stored
+ * exactly as Meta returns them — sync never validates or rewrites them.
  */
-export async function syncTemplates(): Promise<SaveResult> {
+export async function syncTemplates(): Promise<SyncResult> {
   const gate = await requireAdminWithCloudApi();
   if ("error" in gate) return { ok: false, error: gate.error };
   const { ctx, cfg } = gate;
@@ -289,9 +310,28 @@ export async function syncTemplates(): Promise<SaveResult> {
   try {
     const remote = await listMetaTemplates(cfg.wabaId, cfg.accessToken);
     const admin = createAdminClient();
-    const remoteKeys = new Set(remote.map((t) => `${t.name} ${t.language}`));
+    const remoteKeys = new Set(remote.map((t) => `${t.name} ${t.language}`));
+
+    const { data: localRows } = await admin
+      .from("whatsapp_templates")
+      .select("id, name, language, status, meta_template_id, orphaned_at")
+      .eq("tenant_id", ctx.tenantId!)
+      .eq("waba_id", cfg.wabaId);
+    const localByKey = new Map(
+      (localRows ?? []).map((r) => [r.name + " " + r.language, r]),
+    );
+
+    let inserted = 0;
+    let updated = 0;
+    let skipped = 0;
 
     for (const t of remote) {
+      const syncKey = t.name + " " + t.language;
+      const existing = localByKey.get(syncKey);
+      if (existing && existing.status === "DRAFT" && !existing.meta_template_id) {
+        skipped++;
+        continue;
+      }
       // Meta returns the literal string "NONE" for a non-rejected template, not
       // null/absent — normalize it, else every approved template shows a "NONE"
       // rejection reason.
@@ -320,25 +360,22 @@ export async function syncTemplates(): Promise<SaveResult> {
       );
       if (error) {
         console.error("[WA Templates] sync upsert failed:", error.message, { name: t.name, language: t.language });
+        continue;
       }
+      if (existing) updated++;
+      else inserted++;
     }
 
-    const { data: localRows } = await admin
-      .from("whatsapp_templates")
-      .select("id, name, language, orphaned_at")
-      .eq("tenant_id", ctx.tenantId!)
-      .eq("waba_id", cfg.wabaId)
-      .not("meta_template_id", "is", null);
-
+    let orphaned = 0;
     for (const row of localRows ?? []) {
-      const key = `${row.name} ${row.language}`;
-      if (!remoteKeys.has(key) && !row.orphaned_at) {
-        await admin.from("whatsapp_templates").update({ orphaned_at: new Date().toISOString() }).eq("id", row.id);
-      }
+      const rowKey = row.name + " " + row.language;
+      if (!row.meta_template_id || remoteKeys.has(rowKey) || row.orphaned_at) continue;
+      await admin.from("whatsapp_templates").update({ orphaned_at: new Date().toISOString() }).eq("id", row.id);
+      orphaned++;
     }
 
     revalidatePath(PATH);
-    return { ok: true };
+    return { ok: true, inserted, updated, orphaned, skipped };
   } catch (e) {
     const message = e instanceof WhatsAppTemplateApiError ? e.message : "Sync failed.";
     return { ok: false, error: message };
