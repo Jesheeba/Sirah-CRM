@@ -3,7 +3,7 @@ import { getUserContext } from "@/lib/auth";
 import { whatsappProviderEnabled } from "@/app/(app)/whatsapp/actions";
 import WhatsAppClient from "@/components/whatsapp/WhatsAppClient";
 import type { WaPrefill } from "@/components/whatsapp/WhatsAppComposer";
-import type { Communication, CommRelatedType, EmailTemplate } from "@/lib/types";
+import type { Communication, CommRelatedType, EmailTemplate, WhatsAppTemplate } from "@/lib/types";
 
 export default async function WhatsAppPage({
   searchParams,
@@ -14,7 +14,7 @@ export default async function WhatsAppPage({
   await getUserContext();
   const sp = await searchParams;
 
-  const [commsRes, tplRes, providerEnabled] = await Promise.all([
+  const [commsRes, tplRes, metaTplRes, providerEnabled] = await Promise.all([
     supabase
       .from("communications")
       .select("*")
@@ -27,6 +27,15 @@ export default async function WhatsAppPage({
       .eq("channel", "whatsapp")
       .eq("is_active", true)
       .is("deleted_at", null)
+      .order("name"),
+    // Only APPROVED Meta templates are sendable outside the 24h window — PENDING/
+    // REJECTED/PAUSED/DISABLED rows are hidden from the composer entirely rather than
+    // shown disabled.
+    supabase
+      .from("whatsapp_templates")
+      .select("*")
+      .eq("status", "APPROVED")
+      .is("orphaned_at", null)
       .order("name"),
     whatsappProviderEnabled(),
   ]);
@@ -48,6 +57,7 @@ export default async function WhatsAppPage({
     <WhatsAppClient
       initial={(commsRes.data ?? []) as Communication[]}
       templates={(tplRes.data ?? []) as EmailTemplate[]}
+      metaTemplates={(metaTplRes.data ?? []) as WhatsAppTemplate[]}
       providerEnabled={providerEnabled}
       initialCompose={initialCompose}
     />

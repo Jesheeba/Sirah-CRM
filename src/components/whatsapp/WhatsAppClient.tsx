@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Communication, EmailTemplate } from "@/lib/types";
+import type { Communication, EmailTemplate, WhatsAppTemplate } from "@/lib/types";
 import WhatsAppComposer, { type WaPrefill } from "./WhatsAppComposer";
 import { sendWhatsApp } from "@/app/(app)/whatsapp/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -76,11 +76,13 @@ function avatar(label: string) {
 export default function WhatsAppClient({
   initial,
   templates,
+  metaTemplates,
   providerEnabled,
   initialCompose,
 }: {
   initial: Communication[];
   templates: EmailTemplate[];
+  metaTemplates: WhatsAppTemplate[];
   providerEnabled: boolean;
   initialCompose?: WaPrefill | null;
 }) {
@@ -397,6 +399,7 @@ export default function WhatsAppClient({
       {composing && (
         <WhatsAppComposer
           templates={templates}
+          metaTemplates={metaTemplates}
           providerEnabled={providerEnabled}
           prefill={composing}
           onClose={() => setComposing(null)}
