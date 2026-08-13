@@ -50,6 +50,37 @@ describe("validateTemplate", () => {
     expect(res.errors.some((e) => e.includes('"{{Customer Name}}"') && e.includes("lowercase"))).toBe(true);
   });
 
+  it("rejects a purely numeric parameter name (old positional syntax)", () => {
+    const res = validateTemplate({
+      ...BASE,
+      components: [body("Hi there, your order {{1}} has shipped.", { "1": "#1042" })],
+    });
+    expect(res.valid).toBe(false);
+    expect(res.errors.some((e) => e.includes('"{{1}}"') && e.includes("purely numeric"))).toBe(true);
+    // Charset error must NOT also fire for a numeric name — digits alone satisfy the
+    // charset, so it's the more specific "purely numeric" message or nothing.
+    expect(res.errors.some((e) => e.includes('"{{1}}"') && e.includes("may only contain"))).toBe(false);
+  });
+
+  it("rejects a template that mixes numbered and named parameters", () => {
+    const res = validateTemplate({
+      ...BASE,
+      components: [
+        body("Hi {{customer_name}}, your order {{1}} has shipped.", { customer_name: "Asha", "1": "#1042" }),
+      ],
+    });
+    expect(res.valid).toBe(false);
+    expect(res.errors.some((e) => e.includes("mixes numbered") && e.includes("named"))).toBe(true);
+  });
+
+  it("does not flag mixing when every parameter is named", () => {
+    const res = validateTemplate({
+      ...BASE,
+      components: [body("Hi {{customer_name}}, your order {{order_number}} has shipped.", { customer_name: "Asha", order_number: "#1042" })],
+    });
+    expect(res.errors.some((e) => e.includes("mixes numbered"))).toBe(false);
+  });
+
   it("rejects a variable at the very start of the body", () => {
     const res = validateTemplate({
       ...BASE,

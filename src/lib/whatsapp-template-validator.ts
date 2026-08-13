@@ -86,6 +86,10 @@ const TOKEN_RE = /\{\{\s*([^{}]*?)\s*\}\}/g;
 // Meta's own rule: "Parameters using the named format must be unique, single strings,
 // composed of lowercase characters and underscores" (numbers are also accepted).
 const PARAM_NAME_RE = /^[a-z0-9_]+$/;
+// PARAM_NAME_RE alone lets a purely-numeric token like "1" through, since digits are a
+// valid character class member — that's indistinguishable from the old positional
+// {{1}} syntax Meta no longer accepts, so it needs its own explicit rejection.
+const PURELY_NUMERIC_RE = /^[0-9]+$/;
 
 /** Unique parameter names referenced in `text`, in first-occurrence order. */
 export function extractVariables(text: string): string[] {
@@ -126,10 +130,17 @@ export function validateTemplate(input: TemplateInput): ValidationResult {
   if (!input.language.trim()) errors.push("Language is required.");
   if (!input.category) errors.push("Category is required.");
 
+  const allVarNames: string[] = [];
+
   function checkParamNames(names: string[], where: string) {
     for (const name of names) {
+      allVarNames.push(name);
       if (!PARAM_NAME_RE.test(name)) {
         errors.push(`The variable "{{${name}}}" in the ${where} may only contain lowercase letters, numbers, and underscores.`);
+      } else if (PURELY_NUMERIC_RE.test(name)) {
+        errors.push(
+          `The variable "{{${name}}}" in the ${where} is a purely numeric name — Meta no longer supports positional parameters like {{1}}; use a descriptive name instead, e.g. {{customer_name}}.`,
+        );
       }
     }
   }
@@ -182,6 +193,18 @@ export function validateTemplate(input: TemplateInput): ValidationResult {
     if (btn.type === "PHONE_NUMBER" && !btn.phone_number?.trim()) {
       errors.push("Phone number buttons need a phone number.");
     }
+  }
+
+  // A single leftover {{1}} from before the named-parameter switch is easy to miss
+  // amid otherwise-correct {{customer_name}} params — each numeric one is already
+  // flagged above, but call out the mix explicitly since Meta requires one style
+  // throughout a template, not a per-parameter choice.
+  const hasNumeric = allVarNames.some((n) => PURELY_NUMERIC_RE.test(n));
+  const hasNamed = allVarNames.some((n) => PARAM_NAME_RE.test(n) && !PURELY_NUMERIC_RE.test(n));
+  if (hasNumeric && hasNamed) {
+    errors.push(
+      "This template mixes numbered (e.g. {{1}}) and named (e.g. {{customer_name}}) parameters — use one style throughout the whole template.",
+    );
   }
 
   return { valid: errors.length === 0, errors };
