@@ -107,6 +107,11 @@ export async function saveDraftTemplate(input: SaveDraftInput): Promise<SaveResu
     .from("whatsapp_templates")
     .insert({
       tenant_id: ctx.tenantId,
+      // owner_id defaults to auth.uid() at the DB level, but that reads the request's
+      // JWT claims — the service-role client carries no user JWT, so the default
+      // evaluates to null and trips the not-null constraint. Set it explicitly, same
+      // reason tenant_id above is explicit rather than left to the stamp trigger.
+      owner_id: ctx.userId,
       waba_id: cfg.wabaId,
       name,
       language,
