@@ -269,9 +269,17 @@ export async function deleteTemplate(id: string): Promise<SaveResult> {
 }
 
 /**
- * Pulls the live list from Meta and reconciles status/rejection_reason/quality_score
- * for rows we've already submitted — catches drift beyond what the webhook delivers
- * (e.g. events missed while the webhook was misconfigured).
+ * Full two-way reconcile against Meta's live template list — catches drift beyond
+ * what the webhook delivers (events missed while the webhook was misconfigured), AND
+ * brings in templates that exist on the WABA but were never created through this app
+ * (e.g. Meta's own "hello_world" sample, or a client's pre-existing templates when
+ * they're first onboarded — sync is how those become visible here at all).
+ *
+ *   - on Meta, no local row      → INSERT (upsert on tenant_id+name+language)
+ *   - on Meta AND local          → UPDATE status/category/components/quality/rejection
+ *   - local (submitted) but gone from Meta → mark orphaned_at, never delete — a
+ *     client's history shouldn't silently vanish because someone deleted it in
+ *     WhatsApp Manager. DRAFT rows are excluded: they were never on Meta to begin with.
  */
 export async function syncTemplates(): Promise<SaveResult> {
   const gate = await requireAdminWithCloudApi();
@@ -281,21 +289,54 @@ export async function syncTemplates(): Promise<SaveResult> {
   try {
     const remote = await listMetaTemplates(cfg.wabaId, cfg.accessToken);
     const admin = createAdminClient();
+    const remoteKeys = new Set(remote.map((t) => `${t.name} ${t.language}`));
+
     for (const t of remote) {
-      await admin
-        .from("whatsapp_templates")
-        .update({
+      // Meta returns the literal string "NONE" for a non-rejected template, not
+      // null/absent — normalize it, else every approved template shows a "NONE"
+      // rejection reason.
+      const rejectionReason = t.rejected_reason && t.rejected_reason !== "NONE" ? t.rejected_reason : null;
+      const quality = typeof t.quality_score === "string" ? t.quality_score : (t.quality_score?.score ?? null);
+
+      const { error } = await admin.from("whatsapp_templates").upsert(
+        {
+          tenant_id: ctx.tenantId,
+          // Same not-null-default-auth.uid()-under-service-role trap as the draft
+          // insert — must be set explicitly on the INSERT branch of this upsert.
+          owner_id: ctx.userId,
+          waba_id: cfg.wabaId,
           meta_template_id: t.id,
+          name: t.name,
+          language: t.language,
+          category: t.category,
+          components: t.components,
           status: t.status,
-          rejection_reason: t.rejected_reason ?? null,
-          quality_score: typeof t.quality_score === "string" ? t.quality_score : t.quality_score?.score ?? null,
+          rejection_reason: rejectionReason,
+          quality_score: quality,
           reviewed_at: new Date().toISOString(),
-        })
-        .eq("tenant_id", ctx.tenantId!)
-        .eq("waba_id", cfg.wabaId)
-        .eq("name", t.name)
-        .eq("language", t.language);
+          orphaned_at: null,
+        },
+        { onConflict: "tenant_id,name,language" },
+      );
+      if (error) {
+        console.error("[WA Templates] sync upsert failed:", error.message, { name: t.name, language: t.language });
+      }
     }
+
+    const { data: localRows } = await admin
+      .from("whatsapp_templates")
+      .select("id, name, language, orphaned_at")
+      .eq("tenant_id", ctx.tenantId!)
+      .eq("waba_id", cfg.wabaId)
+      .not("meta_template_id", "is", null);
+
+    for (const row of localRows ?? []) {
+      const key = `${row.name} ${row.language}`;
+      if (!remoteKeys.has(key) && !row.orphaned_at) {
+        await admin.from("whatsapp_templates").update({ orphaned_at: new Date().toISOString() }).eq("id", row.id);
+      }
+    }
+
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {

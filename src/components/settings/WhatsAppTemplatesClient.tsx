@@ -593,6 +593,11 @@ export default function WhatsAppTemplatesClient({
               </div>
               <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[t.status]}`}>{t.status}</span>
             </div>
+            {t.orphaned_at && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+                No longer found on WhatsApp — it may have been deleted directly in WhatsApp Manager.
+              </p>
+            )}
             {t.rejection_reason && (
               <p className="mt-2 rounded-lg bg-red-50 px-2 py-1.5 text-xs text-red-700">{t.rejection_reason}</p>
             )}

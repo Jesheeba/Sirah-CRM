@@ -449,6 +449,9 @@ export interface WhatsAppTemplate {
   quality_score: string | null;
   submitted_at: string | null;
   reviewed_at: string | null;
+  /** Set when a sync no longer finds this (previously submitted) template on Meta —
+   *  deleted there outside our app. Never touched for DRAFT rows. */
+  orphaned_at: string | null;
   owner_id: string | null;
   created_at: string;
 }
