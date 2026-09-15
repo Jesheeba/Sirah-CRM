@@ -9,6 +9,7 @@ import {
   deleteMetaTemplate,
   editMetaTemplate,
   listMetaTemplates,
+  KNOWN_TEMPLATE_STATUSES,
   WhatsAppTemplateApiError,
 } from "@/lib/whatsapp-templates";
 import { validateTemplate, type TemplateCategory, type TemplateComponent } from "@/lib/whatsapp-template-validator";
@@ -33,6 +34,8 @@ export interface SyncResult {
   orphaned?: number;
   /** Local DRAFT rows left untouched despite a name+language collision with a remote template. */
   skipped?: number;
+  /** Remote templates that didn't sync — unrecognized status from Meta, or a write error. */
+  failures?: { name: string; language: string; reason: string }[];
 }
 
 export interface SaveDraftInput {
@@ -324,12 +327,25 @@ export async function syncTemplates(): Promise<SyncResult> {
     let inserted = 0;
     let updated = 0;
     let skipped = 0;
+    const failures: { name: string; language: string; reason: string }[] = [];
 
     for (const t of remote) {
       const syncKey = t.name + " " + t.language;
       const existing = localByKey.get(syncKey);
       if (existing && existing.status === "DRAFT" && !existing.meta_template_id) {
         skipped++;
+        continue;
+      }
+      // Same whitelist the message_template_status_update webhook checks events
+      // against — Meta's status vocabulary outgrows the local CHECK constraint on
+      // occasion (IN_APPEAL/PENDING_DELETION/etc. showed up before the constraint knew
+      // about them), and an unrecognized value must fail loud here rather than hitting
+      // the constraint mid-upsert and getting logged as an opaque Postgres error.
+      if (!KNOWN_TEMPLATE_STATUSES.has(t.status)) {
+        console.warn(
+          `[WA Templates] sync: unrecognized status "${t.status}" from Meta for ${t.name}/${t.language} — skipped, not written`,
+        );
+        failures.push({ name: t.name, language: t.language, reason: `Unrecognized status "${t.status}"` });
         continue;
       }
       // Meta returns the literal string "NONE" for a non-rejected template, not
@@ -360,6 +376,7 @@ export async function syncTemplates(): Promise<SyncResult> {
       );
       if (error) {
         console.error("[WA Templates] sync upsert failed:", error.message, { name: t.name, language: t.language });
+        failures.push({ name: t.name, language: t.language, reason: error.message });
         continue;
       }
       if (existing) updated++;
@@ -375,7 +392,7 @@ export async function syncTemplates(): Promise<SyncResult> {
     }
 
     revalidatePath(PATH);
-    return { ok: true, inserted, updated, orphaned, skipped };
+    return { ok: true, inserted, updated, orphaned, skipped, failures };
   } catch (e) {
     const message = e instanceof WhatsAppTemplateApiError ? e.message : "Sync failed.";
     return { ok: false, error: message };

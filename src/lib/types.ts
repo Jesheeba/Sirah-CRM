@@ -104,6 +104,8 @@ export interface Contact {
   phone: string | null;
   title: string | null;
   owner_id: string | null;
+  instagram_id: string | null;
+  source: string | null;
   created_at: string;
   accounts?: { name: string } | null;
   custom_fields?: Record<string, string> | null;
@@ -330,7 +332,7 @@ export interface Invoice {
 }
 
 // ---- Email / Communications (Phase 6) ---------------------------------------
-export type CommChannel = "email" | "whatsapp" | "sms";
+export type CommChannel = "email" | "whatsapp" | "sms" | "instagram";
 export type CommDirection = "outbound" | "inbound";
 export type CommStatus =
   | "draft"
@@ -378,6 +380,7 @@ export interface Communication {
   status: CommStatus;
   to_email: string | null;
   to_phone: string | null;
+  to_external_id: string | null;
   to_name: string | null;
   from_email: string | null;
   cc: string | null;
@@ -425,7 +428,17 @@ export interface IntegrationSetting {
 }
 
 // ---- WhatsApp Business message templates (Tech Provider capability) ---------
-export type WhatsAppTemplateStatus = "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "PAUSED" | "DISABLED";
+export type WhatsAppTemplateStatus =
+  | "DRAFT"
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "PAUSED"
+  | "DISABLED"
+  | "IN_APPEAL"
+  | "PENDING_DELETION"
+  | "FLAGGED"
+  | "REINSTATED";
 export const WHATSAPP_TEMPLATE_STATUSES: WhatsAppTemplateStatus[] = [
   "DRAFT",
   "PENDING",
@@ -433,6 +446,10 @@ export const WHATSAPP_TEMPLATE_STATUSES: WhatsAppTemplateStatus[] = [
   "REJECTED",
   "PAUSED",
   "DISABLED",
+  "IN_APPEAL",
+  "PENDING_DELETION",
+  "FLAGGED",
+  "REINSTATED",
 ];
 
 export interface WhatsAppTemplate {
@@ -492,6 +509,8 @@ export interface MetaLeadPage {
   subscribed: boolean;
   default_owner_id: string | null;
   connected_by: string | null;
+  ig_business_id: string | null;
+  ig_dm_enabled: boolean;
   created_at: string;
   updated_at: string;
 }

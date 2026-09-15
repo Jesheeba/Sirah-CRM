@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizePhone, isOptOutMessage } from "@/lib/whatsapp";
+import { KNOWN_TEMPLATE_STATUSES } from "@/lib/whatsapp-templates";
 
 // Node.js runtime required for the `crypto` module (HMAC verification).
 export const runtime = "nodejs";
@@ -237,7 +238,9 @@ export async function POST(req: NextRequest) {
 
 // ── Template status / quality events ──────────────────────────────────────────
 
-const TEMPLATE_STATUS_EVENTS = new Set(["APPROVED", "REJECTED", "PENDING", "PAUSED", "DISABLED"]);
+// Statuses where Meta's explanation belongs in rejection_reason — not just REJECTED.
+// PAUSED/DISABLED/FLAGGED carry their explanation in `other_info`, not `reason`.
+const NEGATIVE_TEMPLATE_EVENTS = new Set(["REJECTED", "PAUSED", "DISABLED", "FLAGGED"]);
 
 /**
  * Updates the local whatsapp_templates row for a message_template_status_update or
@@ -262,16 +265,21 @@ async function handleTemplateEvent(
 
   if (field === "message_template_status_update") {
     const event = value?.event;
-    if (!event || !TEMPLATE_STATUS_EVENTS.has(event)) {
-      // Meta also emits FLAGGED / IN_APPEAL / PENDING_DELETION / REINSTATED / etc. —
-      // log rather than silently drop so an unrecognized transition leaves a trace.
+    if (!event || !KNOWN_TEMPLATE_STATUSES.has(event)) {
+      // Log rather than silently drop so a transition Meta adds later leaves a trace
+      // instead of vanishing the way IN_APPEAL/PENDING_DELETION/FLAGGED/REINSTATED did
+      // before they were added to KNOWN_TEMPLATE_STATUSES.
       console.warn(
         `[WA Webhook] Unhandled template status event "${event}" for waba ${wabaId} ${name}/${language}`,
       );
       return;
     }
     updates.status = event;
-    updates.rejection_reason = event === "REJECTED" ? (value?.reason ?? null) : null;
+    // REJECTED carries its explanation in `reason`; PAUSED/DISABLED/FLAGGED carry theirs
+    // in `other_info` instead — check both rather than discarding whichever Meta didn't use.
+    updates.rejection_reason = NEGATIVE_TEMPLATE_EVENTS.has(event)
+      ? (value?.reason ?? value?.other_info?.description ?? value?.other_info?.title ?? null)
+      : null;
     if (value?.message_template_id != null) updates.meta_template_id = String(value.message_template_id);
   } else {
     if (!value?.new_quality_score) return;
@@ -298,6 +306,7 @@ interface TemplateEventValue {
   message_template_name?: string;
   message_template_language?: string;
   reason?: string | null;
+  other_info?: { title?: string; description?: string } | null;
   previous_quality_score?: string;
   new_quality_score?: string;
 }

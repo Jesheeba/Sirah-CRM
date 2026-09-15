@@ -12,6 +12,17 @@ if (typeof window !== "undefined") {
 
 export class WhatsAppTemplateApiError extends Error {}
 
+/**
+ * Status vocabulary whatsapp_templates.status actually accepts (mirrors the CHECK
+ * constraint in 0055_whatsapp_templates_status_vocab.sql). Shared between the
+ * message_template_status_update webhook and syncTemplates() so both reject the same
+ * unrecognized values instead of one of them finding out via a constraint violation.
+ */
+export const KNOWN_TEMPLATE_STATUSES = new Set([
+  "APPROVED", "REJECTED", "PENDING", "PAUSED", "DISABLED",
+  "IN_APPEAL", "PENDING_DELETION", "FLAGGED", "REINSTATED",
+]);
+
 async function metaFetch(
   path: string,
   accessToken: string,

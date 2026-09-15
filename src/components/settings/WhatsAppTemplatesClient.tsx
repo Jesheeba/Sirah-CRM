@@ -54,6 +54,10 @@ const STATUS_STYLES: Record<WhatsAppTemplateStatus, string> = {
   REJECTED: "bg-red-100 text-red-700",
   PAUSED: "bg-orange-100 text-orange-700",
   DISABLED: "bg-red-100 text-red-700",
+  IN_APPEAL: "bg-amber-100 text-amber-700",
+  PENDING_DELETION: "bg-red-100 text-red-700",
+  FLAGGED: "bg-orange-100 text-orange-700",
+  REINSTATED: "bg-green-100 text-green-700",
 };
 
 type HeaderFormat = "NONE" | "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
@@ -288,6 +292,12 @@ export default function WhatsAppTemplatesClient({
     if (res.orphaned) parts.push(res.orphaned + " orphaned");
     if (res.skipped) parts.push(res.skipped + " draft" + (res.skipped === 1 ? "" : "s") + " skipped (name collision)");
     setSyncSummary(parts.length > 0 ? "Synced: " + parts.join(", ") + "." : "Already up to date.");
+    if (res.failures && res.failures.length > 0) {
+      setError(
+        res.failures.length + " template" + (res.failures.length === 1 ? "" : "s") + " failed to sync — " +
+          res.failures.map((f) => `${f.name}/${f.language}: ${f.reason}`).join("; "),
+      );
+    }
     router.refresh();
   }
 
