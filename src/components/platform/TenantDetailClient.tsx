@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import StatTile from "@/components/charts/StatTile";
 import { timeAgo, type TenantDetail } from "@/lib/platform";
+import { resetTenantPassword, type ResetPasswordResult } from "@/app/(platform)/platform/actions";
 
 export default function TenantDetailClient({ tenant }: { tenant: TenantDetail }) {
   const supabase = createClient();
@@ -16,7 +17,23 @@ export default function TenantDetailClient({ tenant }: { tenant: TenantDetail })
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [resetTarget, setResetTarget] = useState<string | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetResult, setResetResult] = useState<ResetPasswordResult | null>(null);
+
   const suspended = status === "suspended";
+
+  async function doResetPassword() {
+    if (!resetTarget) return;
+    setResetBusy(true);
+    setResetError(null);
+    const res = await resetTenantPassword({ tenantId: tenant.id, email: resetTarget });
+    setResetBusy(false);
+    if (!res.ok) return setResetError(res.error ?? "Could not reset password.");
+    setResetTarget(null);
+    setResetResult(res);
+  }
 
   async function toggle() {
     const next = suspended ? "active" : "suspended";
@@ -62,6 +79,26 @@ export default function TenantDetailClient({ tenant }: { tenant: TenantDetail })
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      {resetError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{resetError}</div>
+      )}
+      {resetResult?.ok && (
+        <div className="space-y-2 rounded-xl border border-green-200 bg-green-50 p-4 text-sm">
+          <p className="font-semibold text-green-800">Password reset ✓</p>
+          <p className="text-green-700">Share these one-time credentials with the admin (shown once):</p>
+          <div className="rounded-lg border border-green-200 bg-white p-3 font-mono text-xs">
+            <div>email: {resetResult.email}</div>
+            <div>password: {resetResult.tempPassword}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setResetResult(null)}
+            className="rounded-lg border border-green-300 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
+          >
+            Close
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile label="Users" value={String(tenant.users)} accent />
@@ -83,7 +120,32 @@ export default function TenantDetailClient({ tenant }: { tenant: TenantDetail })
             <Row k="Timezone" v={tenant.timezone} />
             <Row k="Locale" v={tenant.locale} />
             <Row k="Created" v={new Date(tenant.created_at).toLocaleString()} />
-            <Row k="Admins" v={tenant.admins.length ? tenant.admins.join(", ") : "—"} />
+            <div className="flex justify-between gap-3">
+              <dt className="pt-0.5 text-slate-400">Admins</dt>
+              <dd className="text-right text-slate-700">
+                {tenant.admins.length === 0 ? (
+                  "—"
+                ) : (
+                  <ul className="space-y-1">
+                    {tenant.admins.map((email) => (
+                      <li key={email} className="flex items-center justify-end gap-2">
+                        <span>{email}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResetTarget(email);
+                            setResetError(null);
+                          }}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          Reset password
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </dd>
+            </div>
           </dl>
         </div>
 
@@ -126,6 +188,18 @@ export default function TenantDetailClient({ tenant }: { tenant: TenantDetail })
           busy={busy}
           onConfirm={toggle}
           onCancel={() => setConfirm(false)}
+        />
+      )}
+
+      {resetTarget && (
+        <ConfirmDialog
+          title="Reset this admin's password?"
+          message={`A new one-time password will be generated for ${resetTarget}. Their current password stops working immediately.`}
+          confirmLabel="Reset password"
+          danger={false}
+          busy={resetBusy}
+          onConfirm={doResetPassword}
+          onCancel={() => setResetTarget(null)}
         />
       )}
     </div>

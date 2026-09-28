@@ -81,3 +81,46 @@ export async function provisionTenant(input: ProvisionInput): Promise<ProvisionR
 
   return { ok: true, tenantId: tenantId as string, ownerEmail, tempPassword: password };
 }
+
+export interface ResetPasswordResult {
+  ok: boolean;
+  email?: string;
+  tempPassword?: string;
+  error?: string;
+}
+
+/**
+ * Resets a tenant admin's password to a new one-time temp password. `admin_resolve_
+ * tenant_admin` scopes the lookup to Admin-role users on that exact tenant, so this
+ * can't be used to reset an arbitrary account elsewhere just by passing any email.
+ */
+export async function resetTenantPassword(input: { tenantId: string; email: string }): Promise<ResetPasswordResult> {
+  const ctx = await getUserContext();
+  if (!ctx?.isPlatformAdmin) return { ok: false, error: "Not authorized." };
+
+  const email = input.email?.trim().toLowerCase();
+  if (!email) return { ok: false, error: "Email is required." };
+
+  const supabase = await createClient();
+  const { data: userId, error: rErr } = await supabase.rpc("admin_resolve_tenant_admin", {
+    p_tenant: input.tenantId,
+    p_email: email,
+  });
+  if (rErr || !userId) return { ok: false, error: rErr?.message ?? "Could not find that admin." };
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { ok: false, error: "Service role not configured (SUPABASE_SERVICE_ROLE_KEY)." };
+  }
+
+  const password = tempPassword();
+  const { error: uErr } = await admin.auth.admin.updateUserById(userId as string, { password });
+  if (uErr) return { ok: false, error: uErr.message };
+
+  // Best-effort audit entry — the password reset itself already succeeded above.
+  await supabase.rpc("admin_log_password_reset", { p_tenant: input.tenantId, p_email: email });
+
+  return { ok: true, email, tempPassword: password };
+}
