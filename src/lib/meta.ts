@@ -15,11 +15,29 @@ if (typeof window !== "undefined") {
 /** Pinned Graph API version (one place to bump). */
 export const GRAPH = "v21.0";
 
-/** Permissions requested during Connect — enough to read pages + retrieve leads.
+/** Permissions requested during "Connect Facebook" — enough to read pages + retrieve leads.
  *  `pages_manage_ads` lets us enumerate a page's lead forms (used for verification /
- *  optional backfill); the webhook itself only needs `leads_retrieval`. */
-export const META_SCOPES =
+ *  optional backfill); the webhook itself only needs `leads_retrieval`.
+ *
+ *  Kept separate from META_SCOPES_INSTAGRAM: `instagram_manage_messages`/`pages_messaging`
+ *  require the app to have those permissions added under Permissions and features in the
+ *  Meta dashboard, or the Facebook Login dialog rejects the ENTIRE scope string with
+ *  "Invalid Scopes" and blocks Connect Facebook too. Two OAuth entry points let an admin
+ *  connect Lead Ads without Instagram DM ever being approved. */
+export const META_SCOPES_FACEBOOK =
   "pages_show_list,pages_manage_metadata,leads_retrieval,pages_read_engagement,business_management,pages_manage_ads";
+
+/** Permissions requested during "Connect Instagram" — covers Instagram DM automation.
+ *  `pages_show_list` is needed to re-list the user's Pages and find which one has a
+ *  linked Instagram Business Account. */
+export const META_SCOPES_INSTAGRAM =
+  "pages_show_list,instagram_basic,instagram_manage_messages,instagram_manage_comments,pages_messaging";
+
+export type MetaConnectIntent = "facebook" | "instagram";
+
+export function scopesForIntent(intent: MetaConnectIntent): string {
+  return intent === "instagram" ? META_SCOPES_INSTAGRAM : META_SCOPES_FACEBOOK;
+}
 
 const appId = () => process.env.META_APP_ID ?? "";
 const appSecret = () => process.env.META_APP_SECRET ?? "";
@@ -44,11 +62,11 @@ export function getRedirectUri(): string {
 }
 
 /** Facebook Login dialog URL the admin is redirected to. */
-export function buildOAuthUrl(state: string): string {
+export function buildOAuthUrl(state: string, scopes: string): string {
   const url = new URL(`https://www.facebook.com/${GRAPH}/dialog/oauth`);
   url.searchParams.set("client_id", appId());
   url.searchParams.set("redirect_uri", getRedirectUri());
-  url.searchParams.set("scope", META_SCOPES);
+  url.searchParams.set("scope", scopes);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("state", state);
   return url.toString();
@@ -141,6 +159,41 @@ export async function unsubscribePage(pageId: string, pageToken: string): Promis
     { method: "DELETE" },
   );
   return Boolean(json.success);
+}
+
+/** Subscribe a Page to the `messages` field (Instagram DM delivery via the same Page webhook object). */
+export async function subscribePageToMessages(pageId: string, pageToken: string): Promise<boolean> {
+  const json = await graphFetch(
+    `${pageId}/subscribed_apps`,
+    { subscribed_fields: "messages", access_token: pageToken },
+    { method: "POST" },
+  );
+  return Boolean(json.success);
+}
+
+/** Subscribe a Page to the `comments` field (Instagram comment events, incl. reels, via the same Page webhook object). */
+export async function subscribePageToComments(pageId: string, pageToken: string): Promise<boolean> {
+  const json = await graphFetch(
+    `${pageId}/subscribed_apps`,
+    { subscribed_fields: "comments", access_token: pageToken },
+    { method: "POST" },
+  );
+  return Boolean(json.success);
+}
+
+/** Resolve the Instagram Business Account linked to a Page, if any. Best-effort:
+ *  most pages have no linked IG account, which is a normal, non-fatal case. */
+export async function fetchInstagramBusinessAccount(pageId: string, pageToken: string): Promise<string | null> {
+  try {
+    const json = await graphFetch(pageId, {
+      access_token: pageToken,
+      fields: "instagram_business_account",
+    });
+    const ig = json.instagram_business_account as { id?: string } | undefined;
+    return ig?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export interface MetaLeadDetail {

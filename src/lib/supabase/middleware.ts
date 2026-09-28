@@ -20,6 +20,7 @@ const PUBLIC_PREFIXES = [
   "/api/whatsapp/device/", // UltraMsg inbound webhook (token in path)
   "/api/whatsapp/cloud/", // Meta Cloud API inbound webhook
   "/api/meta/leadgen", // Meta Lead Ads webhook
+  "/api/meta/instagram-webhook", // Instagram DM webhook (own HMAC verify, same as leadgen)
   "/api/meta/data-deletion", // Meta data-deletion callback (server-to-server)
   "/api/payments/razorpay/webhook/", // Razorpay server-to-server callback
   "/api/leads/capture", // web-to-lead capture, called from external landing pages

@@ -10,3 +10,6 @@ build/
 next-env.d.ts
 .vercel
 supabase/.temp/
+
+.vercel
+.env*

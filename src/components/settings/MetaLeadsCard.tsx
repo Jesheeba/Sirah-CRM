@@ -200,7 +200,7 @@ export default function MetaLeadsCard({
       {/* Connect button */}
       {configured ? (
         <a
-          href="/api/meta/oauth/start"
+          href="/api/meta/oauth/start?intent=facebook"
           className="inline-flex items-center gap-2 rounded-lg bg-[#1877F2] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
         >
           {pages.length ? "Connect another page" : "Connect Facebook"}

@@ -3,10 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserContext } from "@/lib/auth";
 import { metaConfigured } from "@/lib/meta";
+import { aiConfigured } from "@/lib/ai";
 import IntegrationsClient from "@/components/settings/IntegrationsClient";
 import MetaLeadsCard from "@/components/settings/MetaLeadsCard";
 import WebToLeadCard from "@/components/settings/WebToLeadCard";
+import InstagramDmCard from "@/components/settings/InstagramDmCard";
+import InstagramCommentCard from "@/components/settings/InstagramCommentCard";
 import type { IntegrationSetting, MetaLeadPage } from "@/lib/types";
+import type { InstagramAutomationRule } from "@/lib/instagram-automation";
+import type { InstagramCommentRule } from "@/lib/instagram-comment-automation";
 
 export default async function IntegrationsPage({
   searchParams,
@@ -25,7 +30,7 @@ export default async function IntegrationsPage({
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  const [{ data: settingsData }, { data: pagesData }, { data: membersData }, tenantResult, deviceRow, cloudRow, razorpayRow] = await Promise.all([
+  const [{ data: settingsData }, { data: pagesData }, { data: rulesData }, { data: commentRulesData }, { data: membersData }, tenantResult, deviceRow, cloudRow, razorpayRow] = await Promise.all([
     supabase
       .from("integration_settings")
       .select(
@@ -34,9 +39,15 @@ export default async function IntegrationsPage({
     supabase
       .from("meta_lead_pages")
       .select(
-        "id, page_id, page_name, is_enabled, subscribed, default_owner_id, connected_by, created_at, updated_at",
+        "id, page_id, page_name, is_enabled, subscribed, default_owner_id, connected_by, ig_business_id, ig_dm_enabled, ig_comment_automation_enabled, created_at, updated_at",
       )
       .order("created_at", { ascending: true }),
+    supabase
+      .from("instagram_automation_rules")
+      .select("id, page_id, rule_type, priority, is_enabled, match_keywords, reply_text, reply_buttons, payload, ai_system_prompt"),
+    supabase
+      .from("instagram_comment_rules")
+      .select("id, page_id, ig_media_id, rule_type, priority, is_enabled, match_keywords, action_type, reply_text, dm_text"),
     supabase.from("profiles").select("id, full_name, email"),
     admin.from("tenants").select("lead_capture_token").eq("id", ctx.tenantId!).maybeSingle(),
     // webhook_token is a secret — only the service-role admin client can read it.
@@ -65,6 +76,18 @@ export default async function IntegrationsPage({
 
   const settings = (settingsData ?? []) as IntegrationSetting[];
   const metaPages = (pagesData ?? []) as MetaLeadPage[];
+  const rulesByPage = ((rulesData ?? []) as (InstagramAutomationRule & { page_id: string })[]).reduce<
+    Record<string, InstagramAutomationRule[]>
+  >((acc, r) => {
+    (acc[r.page_id] ??= []).push(r);
+    return acc;
+  }, {});
+  const commentRulesByPage = ((commentRulesData ?? []) as (InstagramCommentRule & { page_id: string })[]).reduce<
+    Record<string, InstagramCommentRule[]>
+  >((acc, r) => {
+    (acc[r.page_id] ??= []).push(r);
+    return acc;
+  }, {});
   const members = ((membersData ?? []) as Array<{ id: string; full_name: string | null; email: string | null }>).map(
     (m) => ({ id: m.id, name: m.full_name || m.email || "User" }),
   );
@@ -103,10 +126,22 @@ export default async function IntegrationsPage({
         pages={metaPages}
         members={members}
         configured={metaConfigured()}
-        notice={first(sp.meta)}
+        notice={first(sp.via) === "instagram" ? null : first(sp.meta)}
         reason={first(sp.reason)}
         connectedCount={first(sp.pages)}
       />
+
+      <InstagramDmCard
+        pages={metaPages}
+        rulesByPage={rulesByPage}
+        aiConfigured={aiConfigured()}
+        configured={metaConfigured()}
+        notice={first(sp.via) === "instagram" ? first(sp.meta) : null}
+        reason={first(sp.reason)}
+        connectedCount={first(sp.pages)}
+      />
+
+      <InstagramCommentCard pages={metaPages} rulesByPage={commentRulesByPage} />
 
       {captureUrl && <WebToLeadCard captureUrl={captureUrl} />}
 

@@ -149,6 +149,7 @@ export default async function ContactDetail({
         contactName={fullName}
         contactEmail={contact.email}
         contactPhone={contact.phone}
+        contactInstagram={contact.instagram_id}
       />
     </div>
   );

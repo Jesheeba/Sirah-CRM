@@ -511,6 +511,7 @@ export interface MetaLeadPage {
   connected_by: string | null;
   ig_business_id: string | null;
   ig_dm_enabled: boolean;
+  ig_comment_automation_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
