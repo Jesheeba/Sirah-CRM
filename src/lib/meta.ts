@@ -171,11 +171,15 @@ export async function subscribePageToMessages(pageId: string, pageToken: string)
   return Boolean(json.success);
 }
 
-/** Subscribe a Page to the `comments` field (Instagram comment events, incl. reels, via the same Page webhook object). */
+/** Subscribe a Page to the `feed` field. For an Instagram account linked via classic
+ *  Facebook Login for Business (as opposed to native Instagram API with Instagram
+ *  Login), comment events on Instagram posts/reels are delivered through the Page's
+ *  `feed` field, not a `comments` field — the Page object's subscribed_apps edge
+ *  doesn't even recognize `"comments"` as a valid field name. */
 export async function subscribePageToComments(pageId: string, pageToken: string): Promise<boolean> {
   const json = await graphFetch(
     `${pageId}/subscribed_apps`,
-    { subscribed_fields: "comments", access_token: pageToken },
+    { subscribed_fields: "feed", access_token: pageToken },
     { method: "POST" },
   );
   return Boolean(json.success);

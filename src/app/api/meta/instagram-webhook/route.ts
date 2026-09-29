@@ -47,12 +47,25 @@ interface CommentChangeValue {
   media?: { id?: string; media_product_type?: string };
   parent_id?: string;
 }
+/** The `feed` field's shape on a classic Page (Facebook Login for Business, the model
+ *  this app uses) — comment events on a linked Instagram account's posts/reels arrive
+ *  this way. The Page object's subscribed_apps edge doesn't even recognize a plain
+ *  `"comments"` field, so this is the only path for this integration model. */
+interface FeedChangeValue {
+  item?: string; // "comment" for a comment event
+  verb?: string; // "add" for a new comment
+  comment_id?: string;
+  post_id?: string;
+  parent_id?: string;
+  message?: string;
+  from?: { id?: string; name?: string };
+}
 interface CommentChange {
   field?: string;
-  value?: CommentChangeValue;
+  value?: CommentChangeValue | FeedChangeValue;
 }
 interface Entry {
-  id?: string; // the Instagram Business Account id
+  id?: string; // Instagram Business Account id (object: "instagram") or Page id (object: "page")
   messaging?: MessagingEvent[];
   changes?: CommentChange[];
 }
@@ -72,13 +85,18 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = JSON.parse(raw) as { object?: string; entry?: Entry[] };
-    if (body.object !== "instagram") return NextResponse.json({ received: true });
+    // "instagram" carries DM events (looked up by Instagram Business Account id).
+    // "feed" comment events for a classically-linked account arrive under "page"
+    // instead, keyed by Page id — both are handled in the same loop below.
+    const isPageFeed = body.object === "page";
+    if (body.object !== "instagram" && !isPageFeed) return NextResponse.json({ received: true });
 
     const admin = createAdminClient();
 
     for (const entry of body.entry ?? []) {
-      const igBusinessId = entry.id;
-      if (!igBusinessId) continue;
+      const entryId = entry.id;
+      if (!entryId) continue;
+      const igBusinessId = entryId; // only meaningful when body.object === "instagram"
 
       for (const evt of entry.messaging ?? []) {
         const igsid = evt.sender?.id;
@@ -243,10 +261,19 @@ export async function POST(req: NextRequest) {
       }
 
       for (const change of entry.changes ?? []) {
-        if (change.field !== "comments") continue;
-        const value = change.value;
-        const commentId = value?.id;
-        const commenterId = value?.from?.id;
+        // Native "comments" field (rare in this app's classic-linkage model) vs. the
+        // Page's "feed" field, whose comment-add events carry a different shape — see
+        // FeedChangeValue above.
+        const isFeed = change.field === "feed";
+        const feedValue = isFeed ? (change.value as FeedChangeValue | undefined) : undefined;
+        if (isFeed && (feedValue?.item !== "comment" || feedValue?.verb !== "add")) continue;
+        if (!isFeed && change.field !== "comments") continue;
+
+        const nativeValue = !isFeed ? (change.value as CommentChangeValue | undefined) : undefined;
+        const commentId = isFeed ? feedValue?.comment_id : nativeValue?.id;
+        const commenterId = isFeed ? feedValue?.from?.id : nativeValue?.from?.id;
+        const commentText = isFeed ? (feedValue?.message ?? null) : (nativeValue?.text ?? null);
+        const mediaId = isFeed ? (feedValue?.post_id ?? null) : (nativeValue?.media?.id ?? null);
         if (!commentId || !commenterId) continue;
 
         // 1. Idempotency — Meta retries on non-200.
@@ -256,17 +283,19 @@ export async function POST(req: NextRequest) {
           .eq("comment_id", commentId);
         if ((count ?? 0) > 0) continue;
 
-        // 2. Resolve tenant + page by Instagram Business Account id.
+        // 2. Resolve tenant + page. "feed" events are keyed by Page id (isPageFeed);
+        //    native "comments" events are keyed by Instagram Business Account id.
         const { data: page } = await admin
           .from("meta_lead_pages")
           .select("tenant_id, page_id, access_token, default_owner_id, connected_by, ig_business_id, ig_comment_automation_enabled")
-          .eq("ig_business_id", igBusinessId)
+          .eq(isFeed ? "page_id" : "ig_business_id", isFeed ? entryId : igBusinessId)
           .maybeSingle();
         if (!page || !page.ig_comment_automation_enabled || !page.access_token) continue;
 
         // A reply from the page itself lands back through this same webhook — never
-        // let the bot answer its own comment reply.
-        const isFromPage = commenterId === page.ig_business_id;
+        // let the bot answer its own comment reply. Public replies post as the Page
+        // itself (feed model) or as the Instagram account (native model).
+        const isFromPage = commenterId === (isFeed ? page.page_id : page.ig_business_id);
 
         const { data: rulesRows } = await admin
           .from("instagram_comment_rules")
@@ -276,7 +305,7 @@ export async function POST(req: NextRequest) {
         const rules = (rulesRows ?? []) as InstagramCommentRule[];
 
         const action = resolveCommentAutomation({
-          event: { text: value?.text ?? null, mediaId: value?.media?.id ?? null, isFromPage },
+          event: { text: commentText, mediaId, isFromPage },
           rules,
         });
 
