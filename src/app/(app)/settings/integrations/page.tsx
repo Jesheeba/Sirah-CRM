@@ -44,7 +44,9 @@ export default async function IntegrationsPage({
       .order("created_at", { ascending: true }),
     supabase
       .from("instagram_automation_rules")
-      .select("id, page_id, rule_type, priority, is_enabled, match_keywords, reply_text, reply_buttons, payload, ai_system_prompt"),
+      .select(
+        "id, page_id, rule_type, priority, is_enabled, match_keywords, reply_text, reply_buttons, payload, ai_system_prompt, require_follower, reply_image_url, reply_link_url, reply_link_title",
+      ),
     supabase
       .from("instagram_comment_rules")
       .select("id, page_id, ig_media_id, rule_type, priority, is_enabled, match_keywords, action_type, reply_text, dm_text"),

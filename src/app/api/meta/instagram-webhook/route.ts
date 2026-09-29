@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { metaVerifyToken, verifyMetaSignature } from "@/lib/meta";
-import { sendInstagramQuickReplies, sendInstagramText, replyToComment, sendPrivateReply } from "@/lib/instagram";
+import {
+  sendInstagramQuickReplies,
+  sendInstagramText,
+  sendInstagramImage,
+  checkIsInstagramFollower,
+  replyToComment,
+  sendPrivateReply,
+} from "@/lib/instagram";
 import { draftReply } from "@/lib/ai";
 import {
   resolveInstagramAutomation,
@@ -186,14 +193,21 @@ export async function POST(req: NextRequest) {
 
         const { data: rulesRows } = await admin
           .from("instagram_automation_rules")
-          .select("id, rule_type, priority, is_enabled, match_keywords, reply_text, reply_buttons, payload, ai_system_prompt")
+          .select(
+            "id, rule_type, priority, is_enabled, match_keywords, reply_text, reply_buttons, payload, ai_system_prompt, require_follower, reply_image_url, reply_link_url, reply_link_title",
+          )
           .eq("tenant_id", page.tenant_id)
           .eq("page_id", page.page_id);
         const rules = (rulesRows ?? []) as InstagramAutomationRule[];
 
+        // Only spend a Graph API call on the follow-status lookup when some enabled,
+        // non-AI rule actually gates on it.
+        const needsFollowerCheck = rules.some((r) => r.is_enabled && r.require_follower && r.rule_type !== "ai_fallback");
+        const isFollower = needsFollowerCheck ? await checkIsInstagramFollower(page.access_token, igsid) : null;
+
         const action = resolveInstagramAutomation({
           mode,
-          event: { text, quickReplyPayload },
+          event: { text, quickReplyPayload, isFollower },
           rules,
           lastAiReplyAt,
         });
@@ -206,7 +220,7 @@ export async function POST(req: NextRequest) {
         } else if (action.kind === "reply") {
           await sendAndLog(
             admin, page.tenant_id, igsid, page.access_token, ownerId, contactId,
-            action.text, action.buttons,
+            action.text, action.buttons, action.imageUrl, action.linkUrl, action.linkTitle,
           );
         } else if (action.kind === "ai") {
           const { data: recent } = await admin
@@ -362,17 +376,16 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
-async function sendAndLog(
+/** Logs+sends one outbound Instagram message and updates its status. */
+async function sendOne(
   admin: ReturnType<typeof createAdminClient>,
   tenantId: string,
   igsid: string,
-  pageToken: string,
   ownerId: string | null,
   contactId: string | null,
-  text: string,
-  buttons?: { title: string; payload: string }[],
+  body: string,
+  send: () => Promise<import("@/lib/instagram").InstagramSendResult>,
 ) {
-  if (!text) return;
   const { data: row } = await admin
     .from("communications")
     .insert({
@@ -381,7 +394,7 @@ async function sendAndLog(
       direction: "outbound",
       status: "queued",
       to_external_id: igsid,
-      body: text,
+      body,
       provider: "instagram",
       related_to_type: contactId ? "contact" : null,
       related_to_id: contactId,
@@ -391,16 +404,41 @@ async function sendAndLog(
     .single();
   if (!row) return;
 
-  const result =
-    buttons && buttons.length
-      ? await sendInstagramQuickReplies(pageToken, igsid, text, buttons)
-      : await sendInstagramText(pageToken, igsid, text);
-
+  const result = await send();
   await admin
     .from("communications")
-    .update({
-      status: result.ok ? "sent" : "failed",
-      provider_message_id: result.providerMessageId ?? null,
-    })
+    .update({ status: result.ok ? "sent" : "failed", provider_message_id: result.providerMessageId ?? null })
     .eq("id", row.id);
+}
+
+/** Sends a rule's reply: an optional image as its own message (Instagram attachments
+ *  carry no caption), then the text with any link appended as a labeled, clickable
+ *  line — plain text auto-links URLs, so no extra API call or permission is needed. */
+async function sendAndLog(
+  admin: ReturnType<typeof createAdminClient>,
+  tenantId: string,
+  igsid: string,
+  pageToken: string,
+  ownerId: string | null,
+  contactId: string | null,
+  text: string,
+  buttons?: { title: string; payload: string }[],
+  imageUrl?: string | null,
+  linkUrl?: string | null,
+  linkTitle?: string | null,
+) {
+  if (imageUrl) {
+    await sendOne(admin, tenantId, igsid, ownerId, contactId, `[image] ${imageUrl}`, () =>
+      sendInstagramImage(pageToken, igsid, imageUrl),
+    );
+  }
+
+  const finalText = linkUrl ? `${text}${text ? "\n\n" : ""}${linkTitle ? `${linkTitle}: ` : ""}${linkUrl}` : text;
+  if (!finalText) return;
+
+  await sendOne(admin, tenantId, igsid, ownerId, contactId, finalText, () =>
+    buttons && buttons.length
+      ? sendInstagramQuickReplies(pageToken, igsid, finalText, buttons)
+      : sendInstagramText(pageToken, igsid, finalText),
+  );
 }

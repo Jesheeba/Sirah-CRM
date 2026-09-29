@@ -31,6 +31,10 @@ function emptyDraft(pageId: string): Omit<InstagramAutomationRule, "id"> & { pag
     reply_buttons: null,
     payload: null,
     ai_system_prompt: null,
+    require_follower: false,
+    reply_image_url: null,
+    reply_link_url: null,
+    reply_link_title: null,
   };
 }
 
@@ -106,6 +110,10 @@ export default function InstagramDmCard({
       reply_buttons: draft.reply_buttons,
       payload: draft.payload,
       ai_system_prompt: draft.ai_system_prompt,
+      require_follower: draft.require_follower ?? false,
+      reply_image_url: draft.reply_image_url ?? null,
+      reply_link_url: draft.reply_link_url ?? null,
+      reply_link_title: draft.reply_link_title ?? null,
     });
     setBusy(null);
     if (!res.ok) setError(res.error ?? "Could not save rule.");
@@ -330,6 +338,16 @@ function RuleEditor({
           />
           Enabled
         </label>
+        {draft.rule_type !== "ai_fallback" && (
+          <label className="flex items-center gap-1 text-xs text-slate-500" title="Only send this reply to users who already follow the connected account">
+            <input
+              type="checkbox"
+              checked={draft.require_follower ?? false}
+              onChange={(e) => setDraft({ ...draft, require_follower: e.target.checked })}
+            />
+            Only if follower
+          </label>
+        )}
       </div>
 
       {(draft.rule_type === "keyword" || draft.rule_type === "handoff" || draft.rule_type === "menu") && (
@@ -352,6 +370,34 @@ function RuleEditor({
           rows={2}
           className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
         />
+      )}
+
+      {draft.rule_type !== "ai_fallback" && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input
+            type="url"
+            placeholder="Image URL to send (optional)"
+            value={draft.reply_image_url ?? ""}
+            onChange={(e) => setDraft({ ...draft, reply_image_url: e.target.value || null })}
+            className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+          />
+          <div className="flex gap-2">
+            <input
+              type="url"
+              placeholder="Link URL (optional)"
+              value={draft.reply_link_url ?? ""}
+              onChange={(e) => setDraft({ ...draft, reply_link_url: e.target.value || null })}
+              className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Link label"
+              value={draft.reply_link_title ?? ""}
+              onChange={(e) => setDraft({ ...draft, reply_link_title: e.target.value || null })}
+              className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+            />
+          </div>
+        </div>
       )}
 
       {draft.rule_type === "menu" && (

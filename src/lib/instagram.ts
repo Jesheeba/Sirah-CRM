@@ -47,6 +47,32 @@ export async function sendInstagramText(pageToken: string, igsid: string, text: 
   return callSendApi(pageToken, { recipient: { id: igsid }, message: { text } });
 }
 
+/** Send an image as its own message (Instagram's Send API has no caption field on
+ *  attachments — pair with a separate sendInstagramText call for accompanying copy). */
+export async function sendInstagramImage(pageToken: string, igsid: string, imageUrl: string): Promise<InstagramSendResult> {
+  return callSendApi(pageToken, {
+    recipient: { id: igsid },
+    message: { attachment: { type: "image", payload: { url: imageUrl, is_reusable: true } } },
+  });
+}
+
+/** True/false once known, or null if the lookup failed or is_user_follow_business isn't
+ *  available for this conversation. Covered by instagram_manage_messages — no separate
+ *  permission needed. Used to gate rules like "only auto-reply to followers". */
+export async function checkIsInstagramFollower(pageToken: string, igsid: string): Promise<boolean | null> {
+  try {
+    const url = new URL(`https://graph.facebook.com/${GRAPH}/${igsid}`);
+    url.searchParams.set("fields", "is_user_follow_business");
+    url.searchParams.set("access_token", pageToken);
+    const res = await fetch(url, { cache: "no-store" });
+    const json = (await res.json().catch(() => ({}))) as { is_user_follow_business?: boolean; error?: unknown };
+    if (!res.ok || json.error || typeof json.is_user_follow_business !== "boolean") return null;
+    return json.is_user_follow_business;
+  } catch {
+    return null;
+  }
+}
+
 /** Send a text reply with up to 13 quick-reply buttons (Instagram's cap). */
 export async function sendInstagramQuickReplies(
   pageToken: string,

@@ -25,6 +25,14 @@ export interface InstagramAutomationRule {
   reply_buttons: InstagramQuickReplyButton[] | null;
   payload: string | null;
   ai_system_prompt: string | null;
+  /** Only fire this rule for senders who already follow the connected account (the
+   *  common "follow me, then I'll DM you" pattern). Ignored by ai_fallback rules. */
+  require_follower?: boolean;
+  /** Optional image sent as its own message before/alongside the text reply. */
+  reply_image_url?: string | null;
+  /** Optional link appended to the text reply as a labeled, clickable line. */
+  reply_link_url?: string | null;
+  reply_link_title?: string | null;
 }
 
 export interface InstagramInboundEvent {
@@ -32,11 +40,22 @@ export interface InstagramInboundEvent {
   /** Set when the sender tapped a quick-reply button, per Instagram's message shape
    *  (there is no separate Messenger-style "postback" event). */
   quickReplyPayload: string | null;
+  /** Whether the sender follows the connected Instagram Business Account — omitted or
+   *  null when unknown (e.g., lookup failed or wasn't needed because no rule requires
+   *  it). Rules with require_follower are skipped unless this is exactly true. */
+  isFollower?: boolean | null;
 }
 
 export type InstagramAutomationAction =
   | { kind: "none" }
-  | { kind: "reply"; text: string; buttons?: InstagramQuickReplyButton[] }
+  | {
+      kind: "reply";
+      text: string;
+      buttons?: InstagramQuickReplyButton[];
+      imageUrl?: string | null;
+      linkUrl?: string | null;
+      linkTitle?: string | null;
+    }
   | { kind: "handoff"; ackText?: string }
   | { kind: "ai"; systemPrompt: string };
 
@@ -56,9 +75,17 @@ export function resolveInstagramAutomation(params: {
 
   if (mode === "human") return { kind: "none" };
 
-  const enabled = rules.filter((r) => r.is_enabled).sort((a, b) => a.priority - b.priority);
+  // A rule marked require_follower only fires when we've confirmed the sender follows
+  // the account (isFollower === true) — unknown or false both skip it, never guess yes.
+  const eligible = (r: InstagramAutomationRule) => !r.require_follower || event.isFollower === true;
+  const enabled = rules.filter((r) => r.is_enabled && eligible(r)).sort((a, b) => a.priority - b.priority);
   const text = (event.text ?? "").trim();
   const lowerText = text.toLowerCase();
+  const media = (r: InstagramAutomationRule) => ({
+    imageUrl: r.reply_image_url ?? undefined,
+    linkUrl: r.reply_link_url ?? undefined,
+    linkTitle: r.reply_link_title ?? undefined,
+  });
 
   // 1. Quick-reply tap — exact payload match against menu/handoff rules, checked
   //    before any keyword scan of the (often identical-looking) button title text.
@@ -70,7 +97,12 @@ export function resolveInstagramAutomation(params: {
       if (byPayload.rule_type === "handoff") {
         return { kind: "handoff", ackText: byPayload.reply_text ?? undefined };
       }
-      return { kind: "reply", text: byPayload.reply_text ?? "", buttons: byPayload.reply_buttons ?? undefined };
+      return {
+        kind: "reply",
+        text: byPayload.reply_text ?? "",
+        buttons: byPayload.reply_buttons ?? undefined,
+        ...media(byPayload),
+      };
     }
   }
 
@@ -91,14 +123,24 @@ export function resolveInstagramAutomation(params: {
       r.match_keywords.some((k) => k && lowerText.includes(k.toLowerCase())),
   );
   if (keywordRule) {
-    return { kind: "reply", text: keywordRule.reply_text ?? "", buttons: keywordRule.reply_buttons ?? undefined };
+    return {
+      kind: "reply",
+      text: keywordRule.reply_text ?? "",
+      buttons: keywordRule.reply_buttons ?? undefined,
+      ...media(keywordRule),
+    };
   }
 
   // 4. Always (catch-all) — replies to any inbound text that didn't match a keyword,
   //    ahead of the AI fallback so a fixed reply is preferred when both are configured.
   const alwaysRule = enabled.find((r) => r.rule_type === "always");
   if (alwaysRule) {
-    return { kind: "reply", text: alwaysRule.reply_text ?? "", buttons: alwaysRule.reply_buttons ?? undefined };
+    return {
+      kind: "reply",
+      text: alwaysRule.reply_text ?? "",
+      buttons: alwaysRule.reply_buttons ?? undefined,
+      ...media(alwaysRule),
+    };
   }
 
   // 5. AI fallback — only if nothing else matched, and only outside the cooldown.

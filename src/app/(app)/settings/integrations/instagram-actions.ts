@@ -78,6 +78,10 @@ export interface InstagramRuleInput {
   reply_buttons: InstagramQuickReplyButton[] | null;
   payload: string | null;
   ai_system_prompt: string | null;
+  require_follower: boolean;
+  reply_image_url: string | null;
+  reply_link_url: string | null;
+  reply_link_title: string | null;
 }
 
 /** Create or update one automation rule for a page. */
@@ -108,6 +112,10 @@ export async function upsertInstagramRule(input: InstagramRuleInput): Promise<In
     reply_buttons: input.reply_buttons,
     payload: input.payload,
     ai_system_prompt: input.ai_system_prompt,
+    require_follower: input.require_follower,
+    reply_image_url: input.reply_image_url,
+    reply_link_url: input.reply_link_url,
+    reply_link_title: input.reply_link_title,
   };
 
   const { error } = input.id
