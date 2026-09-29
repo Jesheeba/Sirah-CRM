@@ -6,7 +6,9 @@ import {
   setInstagramDmEnabled,
   upsertInstagramRule,
   deleteInstagramRule,
+  disconnectInstagram,
 } from "@/app/(app)/settings/integrations/instagram-actions";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import type { MetaLeadPage } from "@/lib/types";
 import type { InstagramAutomationRule, InstagramRuleType } from "@/lib/instagram-automation";
 
@@ -65,8 +67,20 @@ export default function InstagramDmCard({
   const [error, setError] = useState<string | null>(null);
   const [openPage, setOpenPage] = useState<string | null>(null);
   const [draft, setDraft] = useState<(Omit<InstagramAutomationRule, "id"> & { page_id: string; id?: string }) | null>(null);
+  const [confirmPage, setConfirmPage] = useState<MetaLeadPage | null>(null);
 
   const igPages = pages.filter((p) => p.ig_business_id);
+
+  async function confirmDisconnect() {
+    if (!confirmPage) return;
+    setError(null);
+    setBusy(confirmPage.page_id);
+    const res = await disconnectInstagram(confirmPage.page_id);
+    setBusy(null);
+    setConfirmPage(null);
+    if (!res.ok) setError(res.error ?? "Could not disconnect.");
+    else router.refresh();
+  }
 
   async function toggle(page: MetaLeadPage, enabled: boolean) {
     setError(null);
@@ -182,6 +196,14 @@ export default function InstagramDmCard({
                   >
                     {isOpen ? "Hide rules" : `Rules (${rules.length})`}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmPage(page)}
+                    disabled={busy === page.page_id}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Disconnect
+                  </button>
                 </div>
               </div>
 
@@ -252,6 +274,16 @@ export default function InstagramDmCard({
           conversation until a rep replies and switches it back to bot mode.
         </p>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmPage)}
+        title="Disconnect Instagram?"
+        message={`DM/comment automation for "${confirmPage?.page_name || confirmPage?.page_id}" will stop, and its rules will be deleted. Its Facebook Lead Ads connection (if any) is not affected.`}
+        confirmLabel="Disconnect"
+        busy={busy !== null && busy === confirmPage?.page_id}
+        onConfirm={confirmDisconnect}
+        onCancel={() => setConfirmPage(null)}
+      />
     </div>
   );
 }

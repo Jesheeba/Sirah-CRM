@@ -38,6 +38,35 @@ export async function setInstagramDmEnabled(pageId: string, enabled: boolean): P
   return { ok: true };
 }
 
+/** Disconnect Instagram DM/comment automation for a Page, without touching its
+ *  separate Facebook Lead Ads connection (same meta_lead_pages row can serve both). */
+export async function disconnectInstagram(pageId: string): Promise<InstagramActionResult> {
+  const g = await requireAdminTenant();
+  if (g.error) return { ok: false, error: g.error };
+
+  const admin = createAdminClient();
+  await admin
+    .from("instagram_automation_rules")
+    .delete()
+    .eq("tenant_id", g.ctx.tenantId)
+    .eq("page_id", pageId);
+  await admin
+    .from("instagram_comment_rules")
+    .delete()
+    .eq("tenant_id", g.ctx.tenantId)
+    .eq("page_id", pageId);
+
+  const { error } = await admin
+    .from("meta_lead_pages")
+    .update({ ig_business_id: null, ig_dm_enabled: false, ig_comment_automation_enabled: false })
+    .eq("tenant_id", g.ctx.tenantId) // MANDATORY: service role bypasses RLS.
+    .eq("page_id", pageId);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/settings/integrations");
+  return { ok: true };
+}
+
 export interface InstagramRuleInput {
   id?: string;
   page_id: string;
