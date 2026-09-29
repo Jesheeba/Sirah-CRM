@@ -31,7 +31,7 @@ export const META_SCOPES_FACEBOOK =
  *  `pages_show_list` is needed to re-list the user's Pages and find which one has a
  *  linked Instagram Business Account. */
 export const META_SCOPES_INSTAGRAM =
-  "pages_show_list,instagram_basic,instagram_manage_messages,instagram_manage_comments,pages_messaging";
+  "pages_show_list,instagram_basic,instagram_manage_messages,instagram_manage_comments";
 
 export type MetaConnectIntent = "facebook" | "instagram";
 

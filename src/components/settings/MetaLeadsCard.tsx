@@ -135,6 +135,21 @@ export default function MetaLeadsCard({
                   </span>
                 </div>
                 <p className="font-mono text-xs text-slate-400">ID {page.page_id}</p>
+                {!page.has_received_lead && (
+                  <p className="mt-1 max-w-md text-xs text-amber-700">
+                    ⚠️ One more step required by Meta before leads will arrive: open{" "}
+                    <a
+                      href={`https://business.facebook.com/latest/instant_forms/forms?asset_id=${page.page_id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium underline"
+                    >
+                      Instant Forms → CRM setup
+                    </a>{" "}
+                    for this page and grant access to “Sirah CRM Leads”. This is a one-time
+                    step Meta requires per page and can’t be done from here.
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-3">

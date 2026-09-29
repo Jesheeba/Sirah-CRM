@@ -514,6 +514,11 @@ export interface MetaLeadPage {
   ig_comment_automation_enabled: boolean;
   created_at: string;
   updated_at: string;
+  /** True once at least one real `leadgen` webhook event has ever landed for this page.
+   *  Meta requires each page's own Business to separately grant this app access via
+   *  Instant Forms → CRM setup — App Review scope alone never covers this. Until that's
+   *  done, leads never arrive even though everything else is configured correctly. */
+  has_received_lead: boolean;
 }
 
 // ---- Calendar (Phase 8) -----------------------------------------------------

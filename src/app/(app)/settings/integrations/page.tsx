@@ -75,7 +75,20 @@ export default async function IntegrationsPage({
   ]);
 
   const settings = (settingsData ?? []) as IntegrationSetting[];
-  const metaPages = (pagesData ?? []) as MetaLeadPage[];
+  const rawMetaPages = (pagesData ?? []) as Omit<MetaLeadPage, "has_received_lead">[];
+
+  // A page's own Business must separately grant this app access via Instant Forms → CRM
+  // setup (Meta's Lead Access Manager) — App Review approval never covers this. Until a
+  // page has produced at least one real event, show the admin a reminder to complete it.
+  const pageIds = rawMetaPages.map((p) => p.page_id);
+  const { data: pagesWithEvents } = pageIds.length
+    ? await admin.from("meta_lead_events").select("page_id").in("page_id", pageIds)
+    : { data: [] as { page_id: string | null }[] };
+  const pagesWithLeadEvents = new Set((pagesWithEvents ?? []).map((r) => r.page_id));
+  const metaPages: MetaLeadPage[] = rawMetaPages.map((p) => ({
+    ...p,
+    has_received_lead: pagesWithLeadEvents.has(p.page_id),
+  }));
   const rulesByPage = ((rulesData ?? []) as (InstagramAutomationRule & { page_id: string })[]).reduce<
     Record<string, InstagramAutomationRule[]>
   >((acc, r) => {
