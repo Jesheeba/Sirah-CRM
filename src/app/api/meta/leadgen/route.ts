@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchLeadDetail, mapLead, metaVerifyToken, verifyMetaSignature } from "@/lib/meta";
+import { processInstagramWebhookBody } from "@/lib/instagram-webhook-handler";
 
 /** Webhook verification handshake (Meta calls GET once on subscribe). */
 export async function GET(req: NextRequest) {
@@ -118,5 +119,11 @@ export async function POST(req: NextRequest) {
   } catch {
     // swallow — always return 200 so Meta doesn't retry indefinitely
   }
+
+  // Meta only allows one callback URL per webhook object. This Page object's URL was
+  // claimed by `leadgen` before `messages`/`feed` were turned on for the same object,
+  // so those events land here too — dispatch them rather than silently dropping them.
+  await processInstagramWebhookBody(raw);
+
   return NextResponse.json({ received: true });
 }
