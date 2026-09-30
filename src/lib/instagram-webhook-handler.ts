@@ -276,6 +276,27 @@ export async function processInstagramWebhookBody(raw: string): Promise<void> {
         // itself (feed model) or as the Instagram account (native model).
         const isFromPage = commenterId === (isFeed ? page.page_id : page.ig_business_id);
 
+        // Log the raw inbound comment regardless of whether a rule matches — mirrors
+        // the DM webhook's inbound logging, and gives visibility into exactly what text
+        // Meta's "feed" payload actually carried, since that payload shape isn't fully
+        // documented for this classic-linkage integration model.
+        if (!isFromPage) {
+          const commentOwnerId = (page.default_owner_id ?? page.connected_by) as string | null;
+          if (commentOwnerId) {
+            await admin.from("communications").insert({
+              tenant_id: page.tenant_id,
+              channel: "instagram",
+              direction: "inbound",
+              status: "received",
+              to_external_id: commenterId,
+              body: `[comment] ${commentText ?? "(no text captured)"}`,
+              provider: "instagram",
+              owner_id: commentOwnerId,
+              is_read: false,
+            });
+          }
+        }
+
         const { data: rulesRows } = await admin
           .from("instagram_comment_rules")
           .select("id, ig_media_id, rule_type, priority, is_enabled, match_keywords, action_type, reply_text, dm_text")
