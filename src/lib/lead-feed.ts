@@ -4,7 +4,10 @@ import { randomBytes } from "crypto";
 export interface FeedLead {
   id: string;
   leadgen_id: string | null;
+  /** When the lead reached the CRM. This is the paging cursor for `since`/`next_since`. */
   created_at: string;
+  /** When the person actually submitted the form on Meta; null if Meta didn't report it. */
+  submitted_at: string | null;
   first_name: string | null;
   last_name: string | null;
   name: string;
@@ -68,6 +71,13 @@ function str(v: unknown): string | null {
   return typeof v === "string" && v ? v : null;
 }
 
+/** Meta reports times as `2026-08-14T09:30:00+0000`; hand consumers standard ISO-8601 (UTC). */
+function toIso(v: string | null): string | null {
+  if (!v) return null;
+  const t = Date.parse(v);
+  return Number.isNaN(t) ? null : new Date(t).toISOString();
+}
+
 export function toFeedLead(row: FeedLeadRow, pageNames: Map<string, string>): FeedLead {
   const cf = row.custom_fields ?? {};
   const answers: Record<string, string> = {};
@@ -80,6 +90,7 @@ export function toFeedLead(row: FeedLeadRow, pageNames: Map<string, string>): Fe
     id: row.id,
     leadgen_id: str(cf.fb_leadgen_id),
     created_at: row.created_at,
+    submitted_at: toIso(str(cf.fb_created_time)),
     first_name: row.first_name,
     last_name: row.last_name,
     name: [row.first_name, row.last_name].filter(Boolean).join(" "),
@@ -100,6 +111,7 @@ const BASE_COLUMNS = [
   "id",
   "leadgen_id",
   "created_at",
+  "submitted_at",
   "name",
   "first_name",
   "last_name",

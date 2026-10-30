@@ -25,6 +25,7 @@ const row = (over: Partial<FeedLeadRow> = {}): FeedLeadRow => ({
     fb_page_id: "333",
     fb_ad_id: "444",
     fb_platform: "fb",
+    fb_created_time: "2026-08-14T09:30:00+0000",
   },
   ...over,
 });
@@ -70,6 +71,7 @@ describe("toFeedLead", () => {
     expect(lead).toMatchObject({
       id: "lead-1",
       leadgen_id: "111",
+      submitted_at: "2026-08-14T09:30:00.000Z",
       name: "Asha Devi",
       platform: "fb",
       page_id: "333",
@@ -84,6 +86,7 @@ describe("toFeedLead", () => {
     expect(lead.name).toBe("");
     expect(lead.page_name).toBeNull();
     expect(lead.answers).toEqual({});
+    expect(lead.submitted_at).toBeNull();
   });
 });
 
@@ -96,7 +99,7 @@ describe("buildCsv", () => {
     );
     const lines = buildCsv([a, b]).trim().split("\r\n");
     expect(lines[0]).toBe(
-      "id,leadgen_id,created_at,name,first_name,last_name,email,phone,company,source,platform,page_id,page_name,form_id,ad_id,answer_city,answer_course",
+      "id,leadgen_id,created_at,submitted_at,name,first_name,last_name,email,phone,company,source,platform,page_id,page_name,form_id,ad_id,answer_city,answer_course",
     );
     expect(lines).toHaveLength(3);
     expect(lines[1].endsWith(",,Graphic design")).toBe(true);

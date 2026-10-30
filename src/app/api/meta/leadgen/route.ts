@@ -80,6 +80,8 @@ export async function POST(req: NextRequest) {
           if (detail.ad_id) custom_fields.fb_ad_id = detail.ad_id;
           if (pageId) custom_fields.fb_page_id = pageId;
           if (detail.platform) custom_fields.fb_platform = detail.platform;
+          // When the person actually submitted the form (the lead's created_at is arrival time).
+          if (detail.created_time) custom_fields.fb_created_time = detail.created_time;
 
           const { data: lead, error: leadErr } = await admin
             .from("leads")

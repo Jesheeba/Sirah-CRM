@@ -149,6 +149,11 @@ export default async function LeadDetail({
             <div className="px-2 py-1 text-sm text-slate-600">
               Source: <span className="font-medium text-slate-800">{lead.source || "—"}</span>
             </div>
+            {typeof cf.fb_created_time === "string" && (
+              <div className="px-2 py-1 text-sm text-slate-600">
+                Form submitted: <span className="font-medium text-slate-800">{fmtWhen(cf.fb_created_time)}</span>
+              </div>
+            )}
             <div className="px-2 py-1 text-sm text-slate-600">
               Score: <span className="font-medium text-slate-800">{lead.score}</span>
             </div>

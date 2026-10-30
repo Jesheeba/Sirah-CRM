@@ -174,6 +174,8 @@ export async function importHistoricalLeads(pageId: string): Promise<ImportResul
             fb_page_id: pageId,
             ...(raw.ad_id ? { fb_ad_id: raw.ad_id } : {}),
             ...(raw.platform ? { fb_platform: raw.platform } : {}),
+            // Original submission time — created_at would otherwise show the import date.
+            ...(raw.created_time ? { fb_created_time: raw.created_time } : {}),
           } as Record<string, string>,
         };
       });
