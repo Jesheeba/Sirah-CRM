@@ -6,10 +6,19 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import StatTile from "@/components/charts/StatTile";
+import LeadFeedCard from "@/components/platform/LeadFeedCard";
 import { timeAgo, type TenantDetail } from "@/lib/platform";
 import { resetTenantPassword, type ResetPasswordResult } from "@/app/(platform)/platform/actions";
 
-export default function TenantDetailClient({ tenant }: { tenant: TenantDetail }) {
+export default function TenantDetailClient({
+  tenant,
+  leadFeedToken,
+  appBase,
+}: {
+  tenant: TenantDetail;
+  leadFeedToken: string | null;
+  appBase: string;
+}) {
   const supabase = createClient();
   const router = useRouter();
   const [status, setStatus] = useState(tenant.status);
@@ -173,6 +182,8 @@ export default function TenantDetailClient({ tenant }: { tenant: TenantDetail })
             Platform admins see configuration status only — never message contents or CRM data.
           </p>
         </div>
+
+        <LeadFeedCard tenantId={tenant.id} initialToken={leadFeedToken} appBase={appBase} />
       </div>
 
       {confirm && (

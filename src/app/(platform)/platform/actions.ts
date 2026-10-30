@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserContext } from "@/lib/auth";
+import { generateFeedToken } from "@/lib/lead-feed";
 
 export interface ProvisionInput {
   orgName: string;
@@ -80,6 +81,49 @@ export async function provisionTenant(input: ProvisionInput): Promise<ProvisionR
   }
 
   return { ok: true, tenantId: tenantId as string, ownerEmail, tempPassword: password };
+}
+
+export interface LeadFeedResult {
+  ok: boolean;
+  /** The active token after the action, or null when the feed was disabled. */
+  token?: string | null;
+  error?: string;
+}
+
+/**
+ * Creates, rotates or disables a tenant's Meta-leads pull feed. `generate` both creates
+ * the first link and rotates an existing one (the old link stops working immediately).
+ * The token table is service-role only, so the platform-admin check happens here.
+ */
+export async function manageLeadFeed(input: {
+  tenantId: string;
+  action: "generate" | "disable";
+}): Promise<LeadFeedResult> {
+  const ctx = await getUserContext();
+  if (!ctx?.isPlatformAdmin) return { ok: false, error: "Not authorized." };
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { ok: false, error: "Service role not configured (SUPABASE_SERVICE_ROLE_KEY)." };
+  }
+
+  if (input.action === "disable") {
+    const { error } = await admin.from("tenant_lead_feeds").delete().eq("tenant_id", input.tenantId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, token: null };
+  }
+
+  const token = generateFeedToken();
+  const { error } = await admin
+    .from("tenant_lead_feeds")
+    .upsert(
+      { tenant_id: input.tenantId, token, rotated_at: new Date().toISOString() },
+      { onConflict: "tenant_id" },
+    );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, token };
 }
 
 export interface ResetPasswordResult {
