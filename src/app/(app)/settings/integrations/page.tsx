@@ -13,6 +13,10 @@ import type { IntegrationSetting, MetaLeadPage } from "@/lib/types";
 import type { InstagramAutomationRule } from "@/lib/instagram-automation";
 import type { InstagramCommentRule } from "@/lib/instagram-comment-automation";
 
+// Server actions on this page inherit this limit. "Import past leads" pulls every lead a
+// Page has ever collected, which can exceed the platform's default function timeout.
+export const maxDuration = 60;
+
 export default async function IntegrationsPage({
   searchParams,
 }: {

@@ -124,65 +124,82 @@ export async function importHistoricalLeads(pageId: string): Promise<ImportResul
   try {
     const forms = await fetchPageForms(pageId, token);
 
+    // Collect every lead first (de-duplicated by leadgen id), then work in batches: a page
+    // with hundreds of leads must not cost two round-trips per lead or the request times out.
+    const incoming = new Map<string, { raw: Awaited<ReturnType<typeof fetchFormLeads>>[number]; formId: string }>();
     for (const form of forms) {
-      const rawLeads = await fetchFormLeads(form.id, token);
+      for (const raw of await fetchFormLeads(form.id, token)) {
+        incoming.set(raw.id, { raw, formId: raw.form_id ?? form.id });
+      }
+    }
 
-      for (const raw of rawLeads) {
-        const { data: existing } = await admin
-          .from("meta_lead_events")
-          .select("id")
-          .eq("leadgen_id", raw.id)
-          .maybeSingle();
+    // Which of them did we already import (or receive via the webhook)?
+    const all = [...incoming.values()];
+    const known = new Set<string>();
+    for (let i = 0; i < all.length; i += 200) {
+      const { data } = await admin
+        .from("meta_lead_events")
+        .select("leadgen_id")
+        .in("leadgen_id", all.slice(i, i + 200).map((x) => x.raw.id));
+      for (const r of data ?? []) known.add(r.leadgen_id as string);
+    }
+    const fresh = all.filter((x) => !known.has(x.raw.id));
+    skipped = all.length - fresh.length;
 
-        if (existing) { skipped++; continue; }
+    for (let i = 0; i < fresh.length; i += 100) {
+      const batch = fresh.slice(i, i + 100);
 
+      const rows = batch.map(({ raw, formId }) => {
         const mapped = mapLead({
           field_data: raw.field_data,
           platform: raw.platform,
           ad_id: raw.ad_id,
-          form_id: raw.form_id ?? form.id,
+          form_id: formId,
           created_time: raw.created_time,
         });
-
-        const customFields: Record<string, string> = {
-          ...mapped.answers,
-          fb_leadgen_id: raw.id,
-          fb_form_id: raw.form_id ?? form.id,
-          fb_page_id: pageId,
-          ...(raw.ad_id ? { fb_ad_id: raw.ad_id } : {}),
-          ...(raw.platform ? { fb_platform: raw.platform } : {}),
+        return {
+          tenant_id: g.ctx.tenantId,
+          first_name: mapped.first_name,
+          last_name: mapped.last_name,
+          email: mapped.email,
+          phone: mapped.phone,
+          company: mapped.company,
+          source: mapped.source,
+          status: "new",
+          owner_id: defaultOwnerId,
+          custom_fields: {
+            ...mapped.answers,
+            fb_leadgen_id: raw.id,
+            fb_form_id: formId,
+            fb_page_id: pageId,
+            ...(raw.ad_id ? { fb_ad_id: raw.ad_id } : {}),
+            ...(raw.platform ? { fb_platform: raw.platform } : {}),
+          } as Record<string, string>,
         };
+      });
 
-        const { data: newLead } = await admin
-          .from("leads")
-          .insert({
-            tenant_id: g.ctx.tenantId,
-            first_name: mapped.first_name,
-            last_name: mapped.last_name,
-            email: mapped.email,
-            phone: mapped.phone,
-            company: mapped.company,
-            source: mapped.source,
-            status: "new",
-            owner_id: defaultOwnerId,
-            custom_fields: customFields,
-          })
-          .select("id")
-          .single();
+      const { data: created, error: leadErr } = await admin
+        .from("leads")
+        .insert(rows)
+        .select("id, custom_fields");
+      if (leadErr) throw new Error(`Saving leads failed after ${imported} imported: ${leadErr.message}`);
 
-        if (!newLead) continue;
-
-        await admin.from("meta_lead_events").insert({
+      const leadIdByLeadgen = new Map<string, string>(
+        (created ?? []).map((l) => [(l.custom_fields as Record<string, string>).fb_leadgen_id, l.id as string]),
+      );
+      const { error: evErr } = await admin.from("meta_lead_events").insert(
+        batch.map(({ raw, formId }) => ({
           tenant_id: g.ctx.tenantId,
           leadgen_id: raw.id,
           page_id: pageId,
-          form_id: raw.form_id ?? form.id,
-          lead_id: newLead.id,
+          form_id: formId,
+          lead_id: leadIdByLeadgen.get(raw.id) ?? null,
           status: "created",
-        });
+        })),
+      );
+      if (evErr) throw new Error(`Recording imported leads failed: ${evErr.message}`);
 
-        imported++;
-      }
+      imported += created?.length ?? 0;
     }
 
     if (imported > 0) revalidatePath("/leads");

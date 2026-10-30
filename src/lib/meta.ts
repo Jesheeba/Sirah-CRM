@@ -225,7 +225,21 @@ export async function fetchLeadDetail(leadgenId: string, pageToken: string): Pro
 
 // ---- Field mapping -----------------------------------------------------------
 
-const STANDARD = new Set(["email", "phone_number", "first_name", "last_name", "full_name", "company_name"]);
+// Meta's standard question types are `email` / `phone_number` / `company_name`, but forms
+// built with custom questions often name them differently (e.g. a plain `phone`). Accept
+// the common variants so the number lands in the lead's phone column, not custom_fields.
+const EMAIL_KEYS = ["email", "email_address"];
+const PHONE_KEYS = ["phone_number", "phone", "mobile_number", "mobile", "whatsapp_number", "contact_number"];
+const COMPANY_KEYS = ["company_name", "company"];
+
+const STANDARD = new Set([
+  ...EMAIL_KEYS,
+  ...PHONE_KEYS,
+  ...COMPANY_KEYS,
+  "first_name",
+  "last_name",
+  "full_name",
+]);
 
 export interface MappedLead {
   first_name: string | null;
@@ -243,10 +257,14 @@ export interface MappedLead {
  * map to columns; every other answer is returned in `answers` for custom_fields.
  */
 export function mapLead(detail: MetaLeadDetail): MappedLead {
-  const get = (name: string): string | null => {
-    const f = detail.field_data.find((x) => x.name === name);
-    const v = f?.values?.[0]?.trim();
-    return v ? v : null;
+  /** First non-empty answer among the given question names (earlier names win). */
+  const get = (...names: string[]): string | null => {
+    for (const name of names) {
+      const f = detail.field_data.find((x) => x.name === name);
+      const v = f?.values?.[0]?.trim();
+      if (v) return v;
+    }
+    return null;
   };
 
   let first = get("first_name");
@@ -270,9 +288,9 @@ export function mapLead(detail: MetaLeadDetail): MappedLead {
   return {
     first_name: first,
     last_name: last,
-    email: get("email"),
-    phone: get("phone_number"),
-    company: get("company_name"),
+    email: get(...EMAIL_KEYS),
+    phone: get(...PHONE_KEYS),
+    company: get(...COMPANY_KEYS),
     answers,
     source: detail.platform === "ig" ? "Instagram Lead Ads" : "Facebook Lead Ads",
   };
