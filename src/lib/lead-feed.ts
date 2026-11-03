@@ -1,4 +1,4 @@
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 
 /** One lead as exposed by the pull feed. Stable, documented shape for external consumers. */
 export interface FeedLead {
@@ -38,9 +38,43 @@ export interface FeedLeadRow {
 export const FEED_DEFAULT_LIMIT = 500;
 export const FEED_MAX_LIMIT = 1000;
 
-/** Opaque, URL-safe, high-entropy feed token. */
+/** Requests allowed per key per minute before the feed answers 429. */
+export const FEED_RATE_LIMIT_PER_MIN = 60;
+/** Active (non-revoked) keys a single tenant may hold. */
+export const FEED_MAX_ACTIVE_KEYS = 10;
+
+/** Opaque, URL-safe, high-entropy feed key. */
 export function generateFeedToken(): string {
   return `lf_${randomBytes(32).toString("base64url")}`;
+}
+
+/** Only this hash is stored; the key itself can't be recovered from it. */
+export function hashFeedKey(key: string): string {
+  return createHash("sha256").update(key, "utf8").digest("hex");
+}
+
+/** Short, non-secret label so a key can be recognised in the UI (e.g. "lf_Ab12Cd"). */
+export function feedKeyPrefix(key: string): string {
+  return key.slice(0, 8);
+}
+
+/**
+ * Where the caller put the key. A header is preferred — URLs end up in browser history,
+ * proxy and server logs, and screenshots. `?token=` remains for Excel / Google Sheets,
+ * which cannot send headers. The header wins if both are present.
+ */
+export function extractFeedKey(
+  headers: { get(name: string): string | null },
+  query: { get(name: string): string | null },
+): { key: string; via: "header" | "url" } | null {
+  const auth = headers.get("authorization");
+  const bearer = auth?.match(/^Bearer\s+(\S+)$/i)?.[1];
+  if (bearer) return { key: bearer, via: "header" };
+  const apiKey = headers.get("x-api-key")?.trim();
+  if (apiKey) return { key: apiKey, via: "header" };
+  const token = query.get("token")?.trim();
+  if (token) return { key: token, via: "url" };
+  return null;
 }
 
 /** Clamp `?limit=` to [1, FEED_MAX_LIMIT]; fall back to the default on junk input. */

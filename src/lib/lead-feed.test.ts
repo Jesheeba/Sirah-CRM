@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   buildCsv,
+  extractFeedKey,
+  feedKeyPrefix,
   generateFeedToken,
+  hashFeedKey,
   parseLimit,
   parseSince,
   toCursor,
@@ -36,6 +39,50 @@ describe("generateFeedToken", () => {
     const b = generateFeedToken();
     expect(a).toMatch(/^lf_[A-Za-z0-9_-]{43}$/);
     expect(a).not.toBe(b);
+  });
+});
+
+describe("hashFeedKey / feedKeyPrefix", () => {
+  it("hashes deterministically to 64 hex chars and never returns the key", () => {
+    const key = generateFeedToken();
+    const h = hashFeedKey(key);
+    expect(h).toMatch(/^[0-9a-f]{64}$/);
+    expect(h).toBe(hashFeedKey(key));
+    expect(h).not.toContain(key);
+    expect(hashFeedKey(key + "x")).not.toBe(h);
+  });
+  it("matches the SQL used by the migration (sha256 of the UTF-8 text, hex)", () => {
+    expect(hashFeedKey("abc")).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+  });
+  it("exposes only a short prefix", () => {
+    expect(feedKeyPrefix("lf_AbCdEfGhIjKl")).toBe("lf_AbCdE");
+  });
+});
+
+describe("extractFeedKey", () => {
+  const h = (o: Record<string, string>) => ({ get: (n: string) => o[n.toLowerCase()] ?? null });
+  const q = (o: Record<string, string>) => ({ get: (n: string) => o[n] ?? null });
+
+  it("prefers a Bearer header and reports it came from a header", () => {
+    expect(extractFeedKey(h({ authorization: "Bearer lf_abc" }), q({}))).toEqual({ key: "lf_abc", via: "header" });
+    expect(extractFeedKey(h({ authorization: "bearer lf_abc" }), q({}))?.key).toBe("lf_abc");
+  });
+  it("accepts X-API-Key", () => {
+    expect(extractFeedKey(h({ "x-api-key": " lf_xyz " }), q({}))).toEqual({ key: "lf_xyz", via: "header" });
+  });
+  it("falls back to ?token= and flags it as url", () => {
+    expect(extractFeedKey(h({}), q({ token: "lf_q" }))).toEqual({ key: "lf_q", via: "url" });
+  });
+  it("the header wins when both are present", () => {
+    expect(extractFeedKey(h({ authorization: "Bearer lf_h" }), q({ token: "lf_q" }))).toEqual({
+      key: "lf_h",
+      via: "header",
+    });
+  });
+  it("returns null for nothing or a malformed Authorization header", () => {
+    expect(extractFeedKey(h({}), q({}))).toBeNull();
+    expect(extractFeedKey(h({ authorization: "Basic abc" }), q({}))).toBeNull();
+    expect(extractFeedKey(h({ authorization: "Bearer" }), q({}))).toBeNull();
   });
 });
 

@@ -25,6 +25,7 @@ const PUBLIC_PREFIXES = [
   "/api/payments/razorpay/webhook/", // Razorpay server-to-server callback
   "/api/leads/capture", // web-to-lead capture, called from external landing pages
   "/api/export/facebook-leads", // Meta lead pull feed — authorized by its own ?token=, not a session
+  "/api/v1/leads/webhook/", // inbound lead webhook — HMAC-signed (X-RD-Signature), not a session
   "/api/sirahagents/", // sirahagents.com seller registration webhook
   "/api/calendar/ics", // iCal feed — authorized by its own ?token=, not a session
   "/api/workflows/tick", // Vercel Cron — authorized by CRON_SECRET inside the route

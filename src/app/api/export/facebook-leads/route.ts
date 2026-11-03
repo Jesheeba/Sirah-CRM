@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  FEED_RATE_LIMIT_PER_MIN,
   buildCsv,
+  extractFeedKey,
+  hashFeedKey,
   parseLimit,
   parseSince,
   toCursor,
@@ -18,9 +21,12 @@ function fail(error: string, status: number): NextResponse {
 /**
  * Pull feed of a tenant's Meta Lead Ads leads (Facebook + Instagram), for external CRMs,
  * Excel Power Query and Google Sheets. No session: it is allow-listed in middleware and
- * authorised solely by the per-tenant `?token=` created by the Super Admin.
+ * authorised solely by an API key the Super Admin created for the tenant. Send it as
+ * `Authorization: Bearer <key>` (or `X-API-Key`); `?token=<key>` is accepted for tools
+ * that cannot set headers (Excel, Google Sheets) but leaves the key in URLs and logs.
+ * Keys are stored hashed and rate-limited per key.
  *
- *   ?token=…            required
+ *   Authorization: Bearer <key>   required (or ?token=)
  *   ?format=json|csv    default json
  *   ?since=<timestamp>  only leads created strictly after this (use `next_since` to page)
  *   ?limit=1..1000      default 500
@@ -29,8 +35,8 @@ function fail(error: string, status: number): NextResponse {
  */
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
-  const token = p.get("token");
-  if (!token) return fail("Missing token.", 401);
+  const supplied = extractFeedKey(req.headers, p);
+  if (!supplied) return fail("Missing API key.", 401);
 
   const format = (p.get("format") ?? "json").toLowerCase();
   if (format !== "json" && format !== "csv") return fail("format must be json or csv.", 400);
@@ -41,13 +47,29 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminClient();
 
-  const { data: feed } = await admin
-    .from("tenant_lead_feeds")
-    .select("tenant_id")
-    .eq("token", token)
+  // Keys are stored only as SHA-256 hashes, so look the caller's key up by its hash.
+  const { data: keyRow } = await admin
+    .from("lead_feed_keys")
+    .select("id, tenant_id")
+    .eq("key_hash", hashFeedKey(supplied.key))
+    .is("revoked_at", null)
     .maybeSingle();
-  if (!feed) return fail("Invalid token.", 401);
-  const tenantId = feed.tenant_id as string;
+  if (!keyRow) return fail("Invalid API key.", 401);
+  const tenantId = keyRow.tenant_id as string;
+
+  // Per-key rate limit (also stamps last-used). Fail closed if the limiter itself errors.
+  const { data: allowed, error: rateErr } = await admin.rpc("lead_feed_hit", {
+    p_key: keyRow.id,
+    p_limit: FEED_RATE_LIMIT_PER_MIN,
+    p_via: supplied.via,
+  });
+  if (rateErr) return fail("Could not process the request.", 500);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Try again in a minute.", retry_after_seconds: 60 },
+      { status: 429, headers: { ...NO_STORE, "Retry-After": "60" } },
+    );
+  }
 
   const { data: tenant } = await admin
     .from("tenants")

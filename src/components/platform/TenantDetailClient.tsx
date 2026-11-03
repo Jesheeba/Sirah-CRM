@@ -7,16 +7,27 @@ import { createClient } from "@/lib/supabase/client";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import StatTile from "@/components/charts/StatTile";
 import LeadFeedCard from "@/components/platform/LeadFeedCard";
+import WebhookChannelsCard from "@/components/platform/WebhookChannelsCard";
 import { timeAgo, type TenantDetail } from "@/lib/platform";
-import { resetTenantPassword, type ResetPasswordResult } from "@/app/(platform)/platform/actions";
+import {
+  resetTenantPassword,
+  type LeadFeedKeyInfo,
+  type ResetPasswordResult,
+  type WebhookChannelInfo,
+  type WebhookDeliveryInfo,
+} from "@/app/(platform)/platform/actions";
 
 export default function TenantDetailClient({
   tenant,
-  leadFeedToken,
+  leadFeedKeys,
+  webhookChannels,
+  webhookDeliveries,
   appBase,
 }: {
   tenant: TenantDetail;
-  leadFeedToken: string | null;
+  leadFeedKeys: LeadFeedKeyInfo[];
+  webhookChannels: WebhookChannelInfo[];
+  webhookDeliveries: WebhookDeliveryInfo[];
   appBase: string;
 }) {
   const supabase = createClient();
@@ -183,7 +194,14 @@ export default function TenantDetailClient({
           </p>
         </div>
 
-        <LeadFeedCard tenantId={tenant.id} initialToken={leadFeedToken} appBase={appBase} />
+        <LeadFeedCard tenantId={tenant.id} initialKeys={leadFeedKeys} appBase={appBase} />
+
+        <WebhookChannelsCard
+          tenantId={tenant.id}
+          initialChannels={webhookChannels}
+          deliveries={webhookDeliveries}
+          appBase={appBase}
+        />
       </div>
 
       {confirm && (
