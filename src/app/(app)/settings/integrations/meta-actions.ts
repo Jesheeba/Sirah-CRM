@@ -127,6 +127,7 @@ export async function importHistoricalLeads(pageId: string): Promise<ImportResul
     // Collect every lead first (de-duplicated by leadgen id), then work in batches: a page
     // with hundreds of leads must not cost two round-trips per lead or the request times out.
     const incoming = new Map<string, { raw: Awaited<ReturnType<typeof fetchFormLeads>>[number]; formId: string }>();
+    const formNames = new Map(forms.map((f) => [f.id, f.name]));
     for (const form of forms) {
       for (const raw of await fetchFormLeads(form.id, token)) {
         incoming.set(raw.id, { raw, formId: raw.form_id ?? form.id });
@@ -171,6 +172,7 @@ export async function importHistoricalLeads(pageId: string): Promise<ImportResul
             ...mapped.answers,
             fb_leadgen_id: raw.id,
             fb_form_id: formId,
+            ...(formNames.get(formId) ? { fb_form_name: formNames.get(formId)! } : {}),
             fb_page_id: pageId,
             ...(raw.ad_id ? { fb_ad_id: raw.ad_id } : {}),
             ...(raw.platform ? { fb_platform: raw.platform } : {}),

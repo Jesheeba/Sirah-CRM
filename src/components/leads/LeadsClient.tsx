@@ -51,6 +51,7 @@ export default function LeadsClient({
   const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [view, setView] = useState<"mine" | "all">(defaultMine ? "mine" : "all");
+  const [formFilter, setFormFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [phoneCountry, setPhoneCountry] = useState(DEFAULT_COUNTRY);
@@ -164,7 +165,13 @@ export default function LeadsClient({
     setLeads((ls) => ls.filter((l) => l.id !== id));
   }
 
-  const filtered = view === "mine" ? leads.filter((l) => l.owner_id === userId) : leads;
+  const formOf = (l: Lead) => {
+    const n = (l.custom_fields as Record<string, unknown> | null)?.fb_form_name;
+    return typeof n === "string" ? n : "";
+  };
+  const formNames = [...new Set(leads.map(formOf).filter(Boolean))].sort();
+  const byView = view === "mine" ? leads.filter((l) => l.owner_id === userId) : leads;
+  const filtered = formFilter ? byView.filter((l) => formOf(l) === formFilter) : byView;
   const visible =
     scoreSort === "none"
       ? filtered
@@ -197,6 +204,21 @@ export default function LeadsClient({
               All
             </button>
           </div>
+          {formNames.length > 0 && (
+            <select
+              value={formFilter}
+              onChange={(e) => setFormFilter(e.target.value)}
+              aria-label="Filter by ad form"
+              className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
+            >
+              <option value="">All ad forms</option>
+              {formNames.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <div className="flex gap-2">
           <Link

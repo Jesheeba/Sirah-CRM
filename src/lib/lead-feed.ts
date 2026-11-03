@@ -19,6 +19,7 @@ export interface FeedLead {
   page_id: string | null;
   page_name: string | null;
   form_id: string | null;
+  form_name: string | null;
   ad_id: string | null;
   answers: Record<string, string>;
 }
@@ -136,6 +137,7 @@ export function toFeedLead(row: FeedLeadRow, pageNames: Map<string, string>): Fe
     page_id: pageId,
     page_name: pageId ? (pageNames.get(pageId) ?? null) : null,
     form_id: str(cf.fb_form_id),
+    form_name: str(cf.fb_form_name),
     ad_id: str(cf.fb_ad_id),
     answers,
   };
@@ -157,6 +159,7 @@ const BASE_COLUMNS = [
   "page_id",
   "page_name",
   "form_id",
+  "form_name",
   "ad_id",
 ] as const;
 

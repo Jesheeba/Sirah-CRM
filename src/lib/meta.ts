@@ -322,6 +322,16 @@ export async function fetchPageForms(pageId: string, pageToken: string): Promise
   return forms;
 }
 
+/** A form's display name, or null when Meta won't tell us (never blocks saving the lead). */
+export async function fetchFormName(formId: string, pageToken: string): Promise<string | null> {
+  try {
+    const json = await graphFetch(formId, { access_token: pageToken, fields: "name" });
+    return typeof json.name === "string" && json.name.trim() ? json.name.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface RawMetaLead {
   id: string;
   field_data: Array<{ name: string; values: string[] }>;

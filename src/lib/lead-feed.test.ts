@@ -25,6 +25,7 @@ const row = (over: Partial<FeedLeadRow> = {}): FeedLeadRow => ({
     course: "Graphic design",
     fb_leadgen_id: "111",
     fb_form_id: "222",
+    fb_form_name: "Graphic design batch Nov",
     fb_page_id: "333",
     fb_ad_id: "444",
     fb_platform: "fb",
@@ -124,6 +125,7 @@ describe("toFeedLead", () => {
       page_id: "333",
       page_name: "RD Interlock Bricks",
       form_id: "222",
+      form_name: "Graphic design batch Nov",
       ad_id: "444",
       answers: { course: "Graphic design" },
     });
@@ -146,7 +148,7 @@ describe("buildCsv", () => {
     );
     const lines = buildCsv([a, b]).trim().split("\r\n");
     expect(lines[0]).toBe(
-      "id,leadgen_id,created_at,submitted_at,name,first_name,last_name,email,phone,company,source,platform,page_id,page_name,form_id,ad_id,answer_city,answer_course",
+      "id,leadgen_id,created_at,submitted_at,name,first_name,last_name,email,phone,company,source,platform,page_id,page_name,form_id,form_name,ad_id,answer_city,answer_course",
     );
     expect(lines).toHaveLength(3);
     expect(lines[1].endsWith(",,Graphic design")).toBe(true);
