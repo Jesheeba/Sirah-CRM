@@ -148,6 +148,7 @@ export default async function IntegrationsPage({
         notice={first(sp.via) === "instagram" ? null : first(sp.meta)}
         reason={first(sp.reason)}
         connectedCount={first(sp.pages)}
+        adsDenied={first(sp.ads) === "denied"}
       />
 
       <InstagramDmCard

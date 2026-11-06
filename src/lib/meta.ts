@@ -76,6 +76,10 @@ export function buildOAuthUrl(state: string, scopes: string): string {
   url.searchParams.set("scope", scopes);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("state", state);
+  // Facebook remembers what it granted before: a reconnect otherwise shows a
+  // "continue as" confirmation and silently keeps the OLD scope set, so a newly
+  // added permission is never asked for. rerequest forces the prompt.
+  url.searchParams.set("auth_type", "rerequest");
   return url.toString();
 }
 
@@ -132,6 +136,19 @@ export async function fetchMetaUserId(accessToken: string): Promise<string | nul
     return typeof json.id === "string" ? json.id : null;
   } catch {
     return null;
+  }
+}
+
+/** Permissions Meta actually granted this token. A declined scope is dropped
+ *  silently rather than failing the OAuth, so this is the only way to tell.
+ *  Best-effort: an empty list means "could not determine", not "none granted". */
+export async function fetchGrantedScopes(userToken: string): Promise<string[]> {
+  try {
+    const json = await graphFetch("me/permissions", { access_token: userToken });
+    const data = (json.data ?? []) as Array<{ permission?: string; status?: string }>;
+    return data.filter((p) => p.status === "granted" && p.permission).map((p) => p.permission!);
+  } catch {
+    return [];
   }
 }
 

@@ -35,6 +35,7 @@ export default function MetaLeadsCard({
   notice,
   reason,
   connectedCount,
+  adsDenied,
 }: {
   pages: MetaLeadPage[];
   members: MetaMember[];
@@ -42,6 +43,8 @@ export default function MetaLeadsCard({
   notice: string | null;
   reason: string | null;
   connectedCount: string | null;
+  /** Meta did not grant ads_management, so ad names cannot be read. */
+  adsDenied?: boolean;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -118,6 +121,14 @@ export default function MetaLeadsCard({
         <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
           Connected {connectedCount ?? ""} page{connectedCount === "1" ? "" : "s"}. Leads will now arrive
           automatically.
+        </div>
+      )}
+      {notice === "connected" && adsDenied && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Connected, but Facebook did not grant <strong>ads access</strong>, so ad names cannot be
+          read — leads will show the ad ID only. Reconnect and make sure the ads permission stays
+          switched on in the Facebook dialog. It is only offered to people who can advertise on
+          both this Page and its ad account.
         </div>
       )}
       {notice === "error" && (
