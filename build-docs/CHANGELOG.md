@@ -38,3 +38,14 @@ not read any ad node. Root cause: `pages_manage_ads` covers ads on a Page, not t
   in success green — any refusal shows amber.
 
 Existing Pages must be disconnected and reconnected to pick up the new scope.
+
+## 2026-11-06 — feat(lead-detail): every Meta field as a labelled row
+The lead detail page dumped the raw `fb_*` metadata as one grey debug line at the bottom while
+the Facts card showed only some of it. Now every field has a labelled row and the debug line is
+gone — one place, readable.
+
+- Added to the Facts card: Ad form ID, Platform (rendered "Facebook"/"Instagram", not "fb"/"ig"),
+  Meta lead ID. Ad, Ad ID, Page ID, Ad form and Form submitted were already there.
+- Removed the raw `fb_*` line and the now-dead `sourceEntries`.
+- "Captured form answers" now appears only when there are real answers, instead of rendering an
+  empty panel saying "No additional answers captured." for a Meta lead with none.

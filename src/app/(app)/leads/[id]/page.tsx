@@ -100,7 +100,6 @@ export default async function LeadDetail({
   const cf = (lead.custom_fields ?? {}) as Record<string, unknown>;
   const prettify = (k: string) => k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
   const answerEntries = Object.entries(cf).filter(([k]) => !definedKeys.has(k) && !k.startsWith("fb_"));
-  const sourceEntries = Object.entries(cf).filter(([k]) => k.startsWith("fb_"));
 
   return (
     <div className="space-y-4">
@@ -169,9 +168,27 @@ export default async function LeadDetail({
                 Page ID: <span className="font-mono text-xs font-medium text-slate-800">{cf.fb_page_id}</span>
               </div>
             )}
+            {typeof cf.fb_form_id === "string" && (
+              <div className="px-2 py-1 text-sm text-slate-600">
+                Ad form ID: <span className="font-mono text-xs font-medium text-slate-800">{cf.fb_form_id}</span>
+              </div>
+            )}
+            {typeof cf.fb_platform === "string" && (
+              <div className="px-2 py-1 text-sm text-slate-600">
+                Platform:{" "}
+                <span className="font-medium text-slate-800">
+                  {cf.fb_platform === "ig" ? "Instagram" : cf.fb_platform === "fb" ? "Facebook" : cf.fb_platform}
+                </span>
+              </div>
+            )}
             {typeof cf.fb_created_time === "string" && (
               <div className="px-2 py-1 text-sm text-slate-600">
                 Form submitted: <span className="font-medium text-slate-800">{fmtWhen(cf.fb_created_time)}</span>
+              </div>
+            )}
+            {typeof cf.fb_leadgen_id === "string" && (
+              <div className="px-2 py-1 text-sm text-slate-600">
+                Meta lead ID: <span className="font-mono text-xs font-medium text-slate-800">{cf.fb_leadgen_id}</span>
               </div>
             )}
             <div className="px-2 py-1 text-sm text-slate-600">
@@ -199,26 +216,17 @@ export default async function LeadDetail({
         </div>
       </div>
 
-      {(answerEntries.length > 0 || sourceEntries.length > 0) && (
+      {answerEntries.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <h3 className="mb-3 text-sm font-semibold text-slate-700">Captured form answers</h3>
-          {answerEntries.length > 0 ? (
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-              {answerEntries.map(([k, v]) => (
-                <div key={k}>
-                  <dt className="text-xs uppercase tracking-wide text-slate-400">{prettify(k)}</dt>
-                  <dd className="mt-0.5 break-words text-sm text-slate-700">{String(v)}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p className="text-sm text-slate-500">No additional answers captured.</p>
-          )}
-          {sourceEntries.length > 0 && (
-            <p className="mt-3 break-words border-t border-slate-100 pt-3 text-xs text-slate-400">
-              {sourceEntries.map(([k, v]) => `${k}: ${String(v)}`).join("   ·   ")}
-            </p>
-          )}
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+            {answerEntries.map(([k, v]) => (
+              <div key={k}>
+                <dt className="text-xs uppercase tracking-wide text-slate-400">{prettify(k)}</dt>
+                <dd className="mt-0.5 break-words text-sm text-slate-700">{String(v)}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       )}
     </div>
