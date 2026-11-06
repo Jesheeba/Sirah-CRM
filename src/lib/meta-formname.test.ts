@@ -44,3 +44,58 @@ describe("fetchAdName", () => {
     expect(await fetchAdName("444", "tok")).toBeNull();
   });
 });
+
+describe("fetchAdName token preference", () => {
+  const origEnv = process.env.META_ADS_TOKEN;
+  afterEach(() => {
+    if (origEnv === undefined) delete process.env.META_ADS_TOKEN;
+    else process.env.META_ADS_TOKEN = origEnv;
+  });
+
+  /** The tokens each Graph call was made with, in order. */
+  const captureTokens = (replies: Array<{ ok: boolean; name?: string }>) => {
+    const used: string[] = [];
+    let i = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: URL) => {
+        used.push(new URL(url).searchParams.get("access_token") ?? "");
+        const r = replies[i++] ?? { ok: false };
+        return Promise.resolve({
+          ok: r.ok,
+          status: r.ok ? 200 : 400,
+          json: async () => (r.ok ? { name: r.name } : { error: { message: "(#275) no ads access" } }),
+        });
+      }),
+    );
+    return used;
+  };
+
+  it("uses the system-user token first when one is configured", async () => {
+    process.env.META_ADS_TOKEN = "sys-token";
+    const used = captureTokens([{ ok: true, name: "keerthi_housewife" }]);
+    expect(await fetchAdName("444", "page-token")).toBe("keerthi_housewife");
+    expect(used).toEqual(["sys-token"]); // the page token is never reached
+  });
+
+  it("falls back to the page token when the system-user token is refused", async () => {
+    process.env.META_ADS_TOKEN = "sys-token";
+    const used = captureTokens([{ ok: false }, { ok: true, name: "pranesh_ads" }]);
+    expect(await fetchAdName("444", "page-token")).toBe("pranesh_ads");
+    expect(used).toEqual(["sys-token", "page-token"]);
+  });
+
+  it("uses only the page token when no system-user token is set", async () => {
+    delete process.env.META_ADS_TOKEN;
+    const used = captureTokens([{ ok: true, name: "reswana mam" }]);
+    expect(await fetchAdName("444", "page-token")).toBe("reswana mam");
+    expect(used).toEqual(["page-token"]);
+  });
+
+  it("returns null when both tokens are refused, so the lead keeps its ad id", async () => {
+    process.env.META_ADS_TOKEN = "sys-token";
+    const used = captureTokens([{ ok: false }, { ok: false }]);
+    expect(await fetchAdName("444", "page-token")).toBeNull();
+    expect(used).toEqual(["sys-token", "page-token"]);
+  });
+});

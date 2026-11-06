@@ -36,6 +36,7 @@ export default function MetaLeadsCard({
   reason,
   connectedCount,
   adsDenied,
+  adsTokenConfigured,
 }: {
   pages: MetaLeadPage[];
   members: MetaMember[];
@@ -45,6 +46,8 @@ export default function MetaLeadsCard({
   connectedCount: string | null;
   /** Meta did not grant ads_management, so ad names cannot be read. */
   adsDenied?: boolean;
+  /** A System User token is set, so ad names resolve without Page ads access. */
+  adsTokenConfigured?: boolean;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -123,7 +126,7 @@ export default function MetaLeadsCard({
           automatically.
         </div>
       )}
-      {notice === "connected" && adsDenied && (
+      {notice === "connected" && adsDenied && !adsTokenConfigured && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Connected, but Facebook did not grant <strong>ads access</strong>, so ad names cannot be
           read — leads will show the ad ID only. Reconnect and make sure the ads permission stays
@@ -255,7 +258,7 @@ export default function MetaLeadsCard({
                           backfillResults[page.page_id].adsRefused === 0
                         ? "✓ Nothing to fill in — every lead already has its ad name."
                         : backfillResults[page.page_id].adsResolved === 0
-                          ? `Meta would not give the name of any of the ${backfillResults[page.page_id].adsRefused} ad(s) — this Page's token has no ads access, so names cannot be filled in.`
+                          ? `Meta would not give the name of any of the ${backfillResults[page.page_id].adsRefused} ad(s) — no token here has ads access. Set META_ADS_TOKEN (a Business Settings System User token) and run this again.`
                           : `✓ ${backfillResults[page.page_id].updated} lead(s) named from ${backfillResults[page.page_id].adsResolved} ad(s)` +
                             (backfillResults[page.page_id].adsRefused > 0
                               ? `; Meta refused ${backfillResults[page.page_id].adsRefused}`

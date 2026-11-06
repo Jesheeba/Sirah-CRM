@@ -40,7 +40,15 @@ Read at session start; update whenever a decision is made.
 - Any scope added here must also be listed on `/privacy` — Meta reviews that page, and the list
   is maintained by hand.
 
+- 2026-11-06: ad names now resolve via `META_ADS_TOKEN`, an optional Business Settings System
+  User token tried BEFORE the Page token in `fetchAdName`. Evidence for the change: adding
+  `ads_management` to the OAuth scopes did NOT work — reconnecting with `auth_type=rerequest`
+  still came back with the scope denied (`&ads=denied`), and the backfill still reported 29 ads
+  refused. Facebook Login withholds `ads_management` until App Review, whatever the app admin's
+  roles. A System User token needs no review, so it is the only route to automatic ad names
+  before review. Unset, behaviour is unchanged: leads keep their ad id.
+
 ## Open questions
-- `ads_management` works for app admins without App Review (Graph error 270 otherwise). Before a
-  non-admin client can get ad names, the app needs App Review + Business Verification for
-  Advanced Access. Not started.
+- App Review + Business Verification for `ads_management` is still unstarted. It is the only way
+  a CLIENT tenant (who cannot be given a System User token on our Business) gets ad names.
+  `META_ADS_TOKEN` solves it for Fortune Innovatives' own account only.

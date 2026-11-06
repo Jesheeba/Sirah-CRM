@@ -356,16 +356,36 @@ export async function fetchFormName(formId: string, pageToken: string): Promise<
   }
 }
 
+/** A System User token with ads access, used to read ad names when the Page token cannot.
+ *  Facebook Login only grants `ads_management` after App Review, so on an unreviewed app the
+ *  Page token is refused the ad node. A System User token is issued in Business Settings and
+ *  needs no review, which is what makes ad names resolve automatically. Optional: unset, the
+ *  Page token is used and a refusal just leaves the lead with its ad id. */
+export function metaAdsToken(): string {
+  return process.env.META_ADS_TOKEN ?? "";
+}
+
+/** True when a System User token is configured — the settings UI explains the consequence. */
+export function metaAdsTokenConfigured(): boolean {
+  return Boolean(metaAdsToken());
+}
+
 /** An ad's display name, or null when Meta won't tell us (never blocks saving the lead).
- *  Needs `ads_management` (see META_SCOPES_FACEBOOK). A Page token granted before that scope
- *  was requested cannot read the ad node, so null is a normal case and only the id is stored. */
+ *  Reading an ad node needs `ads_management`, which Facebook Login withholds without App
+ *  Review — so META_ADS_TOKEN is tried first and the Page token only as a fallback. Null is
+ *  a normal case: the lead keeps its ad id. */
 export async function fetchAdName(adId: string, pageToken: string): Promise<string | null> {
-  try {
-    const json = await graphFetch(adId, { access_token: pageToken, fields: "name" });
-    return typeof json.name === "string" && json.name.trim() ? json.name.trim() : null;
-  } catch {
-    return null;
+  for (const token of [metaAdsToken(), pageToken]) {
+    if (!token) continue;
+    try {
+      const json = await graphFetch(adId, { access_token: token, fields: "name" });
+      const name = typeof json.name === "string" ? json.name.trim() : "";
+      if (name) return name;
+    } catch {
+      // Try the next token; a refusal here is expected on an unreviewed app.
+    }
   }
+  return null;
 }
 
 export interface RawMetaLead {
