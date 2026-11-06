@@ -19,13 +19,20 @@ export const GRAPH = "v21.0";
  *  `pages_manage_ads` lets us enumerate a page's lead forms (used for verification /
  *  optional backfill); the webhook itself only needs `leads_retrieval`.
  *
+ *  `ads_management` is what makes an AD NODE readable (`GET /{ad-id}?fields=name`), which is
+ *  how a lead gets its ad name. `pages_manage_ads` is NOT enough — it covers ads on a Page,
+ *  not the ad object. Meta accepts a Page token here, but only when the person connecting can
+ *  advertise on both the Page and the ad account. Outside App Review this works only for app
+ *  admins (Graph error 270), so a lead keeps showing its raw ad id until the scope is granted
+ *  — never a failure, just a missing name.
+ *
  *  Kept separate from META_SCOPES_INSTAGRAM: `instagram_manage_messages`/`pages_messaging`
  *  require the app to have those permissions added under Permissions and features in the
  *  Meta dashboard, or the Facebook Login dialog rejects the ENTIRE scope string with
  *  "Invalid Scopes" and blocks Connect Facebook too. Two OAuth entry points let an admin
  *  connect Lead Ads without Instagram DM ever being approved. */
 export const META_SCOPES_FACEBOOK =
-  "pages_show_list,pages_manage_metadata,leads_retrieval,pages_read_engagement,business_management,pages_manage_ads";
+  "pages_show_list,pages_manage_metadata,leads_retrieval,pages_read_engagement,business_management,pages_manage_ads,ads_management";
 
 /** Permissions requested during "Connect Instagram" — covers Instagram DM automation.
  *  `pages_show_list` is needed to re-list the user's Pages and find which one has a
@@ -333,8 +340,8 @@ export async function fetchFormName(formId: string, pageToken: string): Promise<
 }
 
 /** An ad's display name, or null when Meta won't tell us (never blocks saving the lead).
- *  Needs `ads_management`/`ads_read`-class access on the ad; a Page token often lacks it,
- *  so a null here is a normal case and only the id is stored. */
+ *  Needs `ads_management` (see META_SCOPES_FACEBOOK). A Page token granted before that scope
+ *  was requested cannot read the ad node, so null is a normal case and only the id is stored. */
 export async function fetchAdName(adId: string, pageToken: string): Promise<string | null> {
   try {
     const json = await graphFetch(adId, { access_token: pageToken, fields: "name" });

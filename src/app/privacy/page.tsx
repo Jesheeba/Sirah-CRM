@@ -85,6 +85,7 @@ export default function PrivacyPolicy() {
             <li><code className="text-sm bg-slate-100 px-1 rounded">pages_read_engagement</code> — read basic Page info</li>
             <li><code className="text-sm bg-slate-100 px-1 rounded">pages_manage_ads</code> — subscribe to ad lead events</li>
             <li><code className="text-sm bg-slate-100 px-1 rounded">business_management</code> — list Business-managed Pages</li>
+            <li><code className="text-sm bg-slate-100 px-1 rounded">ads_management</code> — read the name of the ad a lead came from</li>
           </ul>
           <p className="mt-3 text-slate-600 leading-relaxed">
             Page Access Tokens are stored securely and used only to retrieve leads on your behalf.

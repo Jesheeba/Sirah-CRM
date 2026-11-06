@@ -30,6 +30,17 @@ Read at session start; update whenever a decision is made.
 - Vitest runs in a `node` environment with no React Testing Library, so client components are not
   unit-tested. Logic that needs a test should live in `src/lib/`.
 
+## Decisions
+- 2026-11-06: added `ads_management` to `META_SCOPES_FACEBOOK`. Resolved by evidence, not guess:
+  "Fill in ad names" on the live site reported **29 ads, 0 resolved**, and Meta's lead-ads guide
+  states ad-level fields need `ads_management` (NOT `ads_read`, which is Insights/CAPI only, and
+  NOT `pages_manage_ads`, which covers ads *on a Page*, not the ad object). A Page token is
+  acceptable, but only when the connecting person can advertise on both the Page and the ad
+  account. Pages connected BEFORE this change keep their old token and must be reconnected.
+- Any scope added here must also be listed on `/privacy` — Meta reviews that page, and the list
+  is maintained by hand.
+
 ## Open questions
-- Should the OAuth scope list gain `ads_read` so `fb_ad_name` resolves reliably? It widens the
-  permission the admin is asked to grant and needs App Review. Currently NOT requested.
+- `ads_management` works for app admins without App Review (Graph error 270 otherwise). Before a
+  non-admin client can get ad names, the app needs App Review + Business Verification for
+  Advanced Access. Not started.

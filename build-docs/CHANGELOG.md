@@ -27,3 +27,14 @@ Fill in `fb_ad_name` on leads stored before ad names were captured.
 
 Doubles as the diagnostic for the open `ads_read` question: "resolved 0, refused N" means the Page
 token has no ads access.
+
+## 2026-11-06 — fix(meta-scopes): request ads_management so ad names resolve
+Running "Fill in ad names" on the live site reported 29 ads, 0 resolved — the Page token could
+not read any ad node. Root cause: `pages_manage_ads` covers ads on a Page, not the ad object.
+
+- `src/lib/meta.ts`: added `ads_management` to `META_SCOPES_FACEBOOK`, with the reasoning inline.
+- `src/app/privacy/page.tsx`: listed the new permission (Meta reviews this page).
+- `src/components/settings/MetaLeadsCard.tsx`: a backfill that resolves nothing no longer renders
+  in success green — any refusal shows amber.
+
+Existing Pages must be disconnected and reconnected to pick up the new scope.

@@ -231,7 +231,13 @@ export default function MetaLeadsCard({
                 )}
 
                 {backfillResults[page.page_id] && (
-                  <span className={`text-xs font-medium ${backfillResults[page.page_id].ok ? "text-green-600" : "text-red-600"}`}>
+                  <span className={`text-xs font-medium ${
+                    // Resolving nothing is a failure the user must act on, even though the
+                    // action itself succeeded — don't dress it in success green.
+                    backfillResults[page.page_id].ok && backfillResults[page.page_id].adsRefused === 0
+                      ? "text-green-600"
+                      : "text-amber-700"
+                  }`}>
                     {!backfillResults[page.page_id].ok
                       ? backfillResults[page.page_id].error
                       : backfillResults[page.page_id].adsResolved === 0 &&
