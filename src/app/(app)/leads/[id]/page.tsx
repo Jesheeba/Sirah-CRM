@@ -154,6 +154,21 @@ export default async function LeadDetail({
                 Ad form: <span className="font-medium text-slate-800">{cf.fb_form_name}</span>
               </div>
             )}
+            {typeof cf.fb_ad_name === "string" && (
+              <div className="px-2 py-1 text-sm text-slate-600">
+                Ad: <span className="font-medium text-slate-800">{cf.fb_ad_name}</span>
+              </div>
+            )}
+            {typeof cf.fb_ad_id === "string" && (
+              <div className="px-2 py-1 text-sm text-slate-600">
+                Ad ID: <span className="font-mono text-xs font-medium text-slate-800">{cf.fb_ad_id}</span>
+              </div>
+            )}
+            {typeof cf.fb_page_id === "string" && (
+              <div className="px-2 py-1 text-sm text-slate-600">
+                Page ID: <span className="font-mono text-xs font-medium text-slate-800">{cf.fb_page_id}</span>
+              </div>
+            )}
             {typeof cf.fb_created_time === "string" && (
               <div className="px-2 py-1 text-sm text-slate-600">
                 Form submitted: <span className="font-medium text-slate-800">{fmtWhen(cf.fb_created_time)}</span>

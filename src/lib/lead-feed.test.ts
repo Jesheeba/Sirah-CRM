@@ -28,6 +28,7 @@ const row = (over: Partial<FeedLeadRow> = {}): FeedLeadRow => ({
     fb_form_name: "Graphic design batch Nov",
     fb_page_id: "333",
     fb_ad_id: "444",
+    fb_ad_name: "Nov batch – carousel A",
     fb_platform: "fb",
     fb_created_time: "2026-08-14T09:30:00+0000",
   },
@@ -127,6 +128,7 @@ describe("toFeedLead", () => {
       form_id: "222",
       form_name: "Graphic design batch Nov",
       ad_id: "444",
+      ad_name: "Nov batch – carousel A",
       answers: { course: "Graphic design" },
     });
   });
@@ -134,6 +136,7 @@ describe("toFeedLead", () => {
     const lead = toFeedLead(row({ custom_fields: null, first_name: null, last_name: null }), new Map());
     expect(lead.name).toBe("");
     expect(lead.page_name).toBeNull();
+    expect(lead.ad_name).toBeNull();
     expect(lead.answers).toEqual({});
     expect(lead.submitted_at).toBeNull();
   });
@@ -148,11 +151,12 @@ describe("buildCsv", () => {
     );
     const lines = buildCsv([a, b]).trim().split("\r\n");
     expect(lines[0]).toBe(
-      "id,leadgen_id,created_at,submitted_at,name,first_name,last_name,email,phone,company,source,platform,page_id,page_name,form_id,form_name,ad_id,answer_city,answer_course",
+      "id,leadgen_id,created_at,submitted_at,name,first_name,last_name,email,phone,company,source,platform,page_id,page_name,form_id,form_name,ad_id,ad_name,answer_city,answer_course",
     );
     expect(lines).toHaveLength(3);
     expect(lines[1].endsWith(",,Graphic design")).toBe(true);
     expect(lines[2].endsWith(",Chennai,")).toBe(true);
+    expect(lines[1]).toContain("444,Nov batch");
   });
 
   it("never duplicates a base column header when a form question shares its name", () => {

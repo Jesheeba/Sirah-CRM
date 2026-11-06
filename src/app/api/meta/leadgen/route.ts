@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchFormName, fetchLeadDetail, mapLead, metaVerifyToken, verifyMetaSignature } from "@/lib/meta";
+import { fetchAdName, fetchFormName, fetchLeadDetail, mapLead, metaVerifyToken, verifyMetaSignature } from "@/lib/meta";
 import { processInstagramWebhookBody } from "@/lib/instagram-webhook-handler";
 
 /** Webhook verification handshake (Meta calls GET once on subscribe). */
@@ -81,7 +81,11 @@ export async function POST(req: NextRequest) {
             const formName = await fetchFormName(resolvedForm, page.access_token as string);
             if (formName) custom_fields.fb_form_name = formName;
           }
-          if (detail.ad_id) custom_fields.fb_ad_id = detail.ad_id;
+          if (detail.ad_id) {
+            custom_fields.fb_ad_id = detail.ad_id;
+            const adName = await fetchAdName(detail.ad_id, page.access_token as string);
+            if (adName) custom_fields.fb_ad_name = adName;
+          }
           if (pageId) custom_fields.fb_page_id = pageId;
           if (detail.platform) custom_fields.fb_platform = detail.platform;
           // When the person actually submitted the form (the lead's created_at is arrival time).

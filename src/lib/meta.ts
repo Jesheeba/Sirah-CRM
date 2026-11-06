@@ -332,6 +332,18 @@ export async function fetchFormName(formId: string, pageToken: string): Promise<
   }
 }
 
+/** An ad's display name, or null when Meta won't tell us (never blocks saving the lead).
+ *  Needs `ads_management`/`ads_read`-class access on the ad; a Page token often lacks it,
+ *  so a null here is a normal case and only the id is stored. */
+export async function fetchAdName(adId: string, pageToken: string): Promise<string | null> {
+  try {
+    const json = await graphFetch(adId, { access_token: pageToken, fields: "name" });
+    return typeof json.name === "string" && json.name.trim() ? json.name.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface RawMetaLead {
   id: string;
   field_data: Array<{ name: string; values: string[] }>;

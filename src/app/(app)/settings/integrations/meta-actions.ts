@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getUserContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { unsubscribePage, fetchPageForms, fetchFormLeads, mapLead } from "@/lib/meta";
+import { unsubscribePage, fetchPageForms, fetchFormLeads, fetchAdName, mapLead } from "@/lib/meta";
 
 export interface MetaActionResult {
   ok: boolean;
@@ -147,6 +147,13 @@ export async function importHistoricalLeads(pageId: string): Promise<ImportResul
     const fresh = all.filter((x) => !known.has(x.raw.id));
     skipped = all.length - fresh.length;
 
+    // One Graph call per distinct ad, not per lead (many leads share an ad).
+    const adNames = new Map<string, string>();
+    for (const adId of new Set(fresh.map((x) => x.raw.ad_id).filter((id): id is string => Boolean(id)))) {
+      const name = await fetchAdName(adId, token);
+      if (name) adNames.set(adId, name);
+    }
+
     for (let i = 0; i < fresh.length; i += 100) {
       const batch = fresh.slice(i, i + 100);
 
@@ -175,6 +182,7 @@ export async function importHistoricalLeads(pageId: string): Promise<ImportResul
             ...(formNames.get(formId) ? { fb_form_name: formNames.get(formId)! } : {}),
             fb_page_id: pageId,
             ...(raw.ad_id ? { fb_ad_id: raw.ad_id } : {}),
+            ...(raw.ad_id && adNames.get(raw.ad_id) ? { fb_ad_name: adNames.get(raw.ad_id)! } : {}),
             ...(raw.platform ? { fb_platform: raw.platform } : {}),
             // Original submission time — created_at would otherwise show the import date.
             ...(raw.created_time ? { fb_created_time: raw.created_time } : {}),

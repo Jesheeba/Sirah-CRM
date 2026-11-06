@@ -52,6 +52,7 @@ export default function LeadsClient({
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [view, setView] = useState<"mine" | "all">(defaultMine ? "mine" : "all");
   const [formFilter, setFormFilter] = useState("");
+  const [adFilter, setAdFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [phoneCountry, setPhoneCountry] = useState(DEFAULT_COUNTRY);
@@ -165,13 +166,18 @@ export default function LeadsClient({
     setLeads((ls) => ls.filter((l) => l.id !== id));
   }
 
-  const formOf = (l: Lead) => {
-    const n = (l.custom_fields as Record<string, unknown> | null)?.fb_form_name;
-    return typeof n === "string" ? n : "";
+  const cfOf = (l: Lead, key: string) => {
+    const v = (l.custom_fields as Record<string, unknown> | null)?.[key];
+    return typeof v === "string" ? v : "";
   };
+  const formOf = (l: Lead) => cfOf(l, "fb_form_name");
+  // Fall back to the ad id so leads whose ad name Meta withheld are still groupable.
+  const adOf = (l: Lead) => cfOf(l, "fb_ad_name") || cfOf(l, "fb_ad_id");
   const formNames = [...new Set(leads.map(formOf).filter(Boolean))].sort();
+  const adNames = [...new Set(leads.map(adOf).filter(Boolean))].sort();
   const byView = view === "mine" ? leads.filter((l) => l.owner_id === userId) : leads;
-  const filtered = formFilter ? byView.filter((l) => formOf(l) === formFilter) : byView;
+  const byForm = formFilter ? byView.filter((l) => formOf(l) === formFilter) : byView;
+  const filtered = adFilter ? byForm.filter((l) => adOf(l) === adFilter) : byForm;
   const visible =
     scoreSort === "none"
       ? filtered
@@ -213,6 +219,21 @@ export default function LeadsClient({
             >
               <option value="">All ad forms</option>
               {formNames.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          )}
+          {adNames.length > 0 && (
+            <select
+              value={adFilter}
+              onChange={(e) => setAdFilter(e.target.value)}
+              aria-label="Filter by ad"
+              className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
+            >
+              <option value="">All ads</option>
+              {adNames.map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>
@@ -333,7 +354,7 @@ export default function LeadsClient({
       )}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="w-full min-w-[760px] text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Name</th>
@@ -350,6 +371,7 @@ export default function LeadsClient({
                   {scoreSort === "asc" && <span>▲</span>}
                 </button>
               </th>
+              <th className="px-4 py-3">Ad</th>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -357,7 +379,7 @@ export default function LeadsClient({
           <tbody className="divide-y divide-slate-100">
             {visible.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
                   {view === "mine"
                     ? "No leads owned by you yet."
                     : "No leads yet — click “Add lead” to capture your first prospect."}
@@ -399,6 +421,24 @@ export default function LeadsClient({
                   >
                     {l.score}
                   </span>
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  {adOf(l) ? (
+                    <span
+                      className="block max-w-[14rem] truncate"
+                      title={[
+                        cfOf(l, "fb_ad_name") && `Ad: ${cfOf(l, "fb_ad_name")}`,
+                        cfOf(l, "fb_ad_id") && `Ad ID: ${cfOf(l, "fb_ad_id")}`,
+                        cfOf(l, "fb_page_id") && `Page ID: ${cfOf(l, "fb_page_id")}`,
+                      ]
+                        .filter(Boolean)
+                        .join("\n")}
+                    >
+                      {adOf(l)}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="px-4 py-3 text-slate-600">{l.email ?? "—"}</td>
                 <td className="px-4 py-3 text-right">
