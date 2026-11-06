@@ -23,10 +23,10 @@ remote (so the workflow's commit step cannot run).
 | Feature | Doc | Status |
 |---|---|---|
 | Meta lead ad attribution (ad name, ad ID, page ID) | `features/meta-lead-ad-attribution.md` | done 2026-11-06 |
+| Backfill ad names onto existing leads | `features/backfill-ad-names.md` | done 2026-11-06 |
 
 ## Build order
 Dependency-free additions to an existing integration; no sequencing constraints. Next candidates,
 not yet approved:
-1. Backfill `fb_ad_name` onto leads already stored (needs a decision on re-reading Meta for
-   historical leads).
-2. Add `ads_read` to the OAuth scopes so ad names resolve reliably (needs Meta App Review).
+1. Add `ads_read` to the OAuth scopes so ad names resolve reliably (needs Meta App Review).
+   Run "Fill in ad names" first — if it reports every ad refused, this is the only way forward.

@@ -30,3 +30,26 @@ Not covered by tests:
 - The webhook and backfill code paths that call `fetchAdName` (no integration test against Meta;
   these paths have no test harness in this repo).
 - The leads-list Ad column and ad filter (client component — see strategy above).
+
+### Backfill ad names onto existing leads (2026-11-06)
+Suite: full run — **11 files, 113 tests passed**. `tsc --noEmit` clean, `next build` compiles.
+
+| Acceptance criterion | Test | Result |
+|---|---|---|
+| AC2 preserves all other custom_fields | `ad-name-backfill.test.ts` › writes the name while preserving every other field | pass |
+| AC3 writes nothing when Meta refuses | › returns null when Meta refused the ad | pass |
+| AC4 one Graph call per distinct ad | › returns one entry per distinct ad, not per lead | pass |
+| AC6 idempotent on re-run | › skips leads that already have a name | pass |
+| no mutation of input | › never mutates the row it was given | pass |
+| blank / missing ad id ignored | › ignores a blank ad id, › skips leads with no ad id | pass |
+
+Verified by rendering `MetaLeadsCard` server-side: the "Fill in ad names" button appears alongside
+"Import past leads", and all five result messages (all-resolved, partial, no-ads-access,
+nothing-to-do, failed) were dumped and read for clarity.
+
+Not covered by tests: the server action's Supabase queries and the Graph calls (no harness).
+
+Design note: the "already has a name" filter was initially written as a
+`.is("custom_fields->>fb_ad_name", null)` clause. Moved into the unit-tested code path instead,
+because a JSONB `->>` null filter that silently matches nothing would make the backfill look like
+a no-op success rather than fail loudly.

@@ -8,7 +8,9 @@ import {
   setMetaPageEnabled,
   setMetaPageOwner,
   importHistoricalLeads,
+  backfillAdNames,
   type ImportResult,
+  type BackfillResult,
 } from "@/app/(app)/settings/integrations/meta-actions";
 import type { MetaLeadPage } from "@/lib/types";
 
@@ -46,6 +48,7 @@ export default function MetaLeadsCard({
   const [error, setError] = useState<string | null>(null);
   const [confirmPage, setConfirmPage] = useState<MetaLeadPage | null>(null);
   const [importResults, setImportResults] = useState<Record<string, ImportResult>>({});
+  const [backfillResults, setBackfillResults] = useState<Record<string, BackfillResult>>({});
 
   async function toggle(page: MetaLeadPage, enabled: boolean) {
     setError(null);
@@ -72,6 +75,16 @@ export default function MetaLeadsCard({
     setBusyId(null);
     setImportResults((prev) => ({ ...prev, [page.page_id]: res }));
     if (!res.ok) setError(res.error ?? "Import failed.");
+  }
+
+  async function startBackfill(page: MetaLeadPage) {
+    setError(null);
+    setBusyId(page.page_id);
+    const res = await backfillAdNames(page.page_id);
+    setBusyId(null);
+    setBackfillResults((prev) => ({ ...prev, [page.page_id]: res }));
+    if (!res.ok) setError(res.error ?? "Backfill failed.");
+    else if (res.updated > 0) router.refresh();
   }
 
   async function confirmDisconnect() {
@@ -192,6 +205,16 @@ export default function MetaLeadsCard({
 
                 <button
                   type="button"
+                  onClick={() => startBackfill(page)}
+                  disabled={busyId === page.page_id}
+                  title="Look up the ad name for past leads that only show an ad ID"
+                  className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                >
+                  {busyId === page.page_id ? "Working…" : "Fill in ad names"}
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setConfirmPage(page)}
                   disabled={busyId === page.page_id}
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-50 disabled:opacity-50"
@@ -204,6 +227,22 @@ export default function MetaLeadsCard({
                     {importResults[page.page_id].ok
                       ? `✓ ${importResults[page.page_id].imported} imported, ${importResults[page.page_id].skipped} skipped`
                       : importResults[page.page_id].error}
+                  </span>
+                )}
+
+                {backfillResults[page.page_id] && (
+                  <span className={`text-xs font-medium ${backfillResults[page.page_id].ok ? "text-green-600" : "text-red-600"}`}>
+                    {!backfillResults[page.page_id].ok
+                      ? backfillResults[page.page_id].error
+                      : backfillResults[page.page_id].adsResolved === 0 &&
+                          backfillResults[page.page_id].adsRefused === 0
+                        ? "✓ Nothing to fill in — every lead already has its ad name."
+                        : backfillResults[page.page_id].adsResolved === 0
+                          ? `Meta would not give the name of any of the ${backfillResults[page.page_id].adsRefused} ad(s) — this Page's token has no ads access, so names cannot be filled in.`
+                          : `✓ ${backfillResults[page.page_id].updated} lead(s) named from ${backfillResults[page.page_id].adsResolved} ad(s)` +
+                            (backfillResults[page.page_id].adsRefused > 0
+                              ? `; Meta refused ${backfillResults[page.page_id].adsRefused}`
+                              : "")}
                   </span>
                 )}
               </div>

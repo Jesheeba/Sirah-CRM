@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getUserContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { unsubscribePage, fetchPageForms, fetchFormLeads, fetchAdName, mapLead } from "@/lib/meta";
+import { distinctAdIds, mergedCustomFields, type BackfillLeadRow } from "@/lib/ad-name-backfill";
 
 export interface MetaActionResult {
   ok: boolean;
@@ -218,5 +219,94 @@ export async function importHistoricalLeads(pageId: string): Promise<ImportResul
     return { ok: true, imported, skipped };
   } catch (e) {
     return { ok: false, imported, skipped, error: e instanceof Error ? e.message : "Import failed." };
+  }
+}
+
+export interface BackfillResult {
+  ok: boolean;
+  /** Leads that gained an ad name. */
+  updated: number;
+  /** Distinct ads Meta told us the name of. */
+  adsResolved: number;
+  /** Distinct ads Meta refused — usually the Page token lacking ads-level read access. */
+  adsRefused: number;
+  error?: string;
+}
+
+/**
+ * Fill in `fb_ad_name` on this Page's existing leads that have an ad id but no ad name
+ * (leads stored before ad names were captured). Merge-only: never overwrites a name and
+ * never drops another custom field.
+ *
+ * `adsRefused` doubles as a diagnostic — all refused means the Page token has no
+ * ads-level read access, so no amount of re-running will help until `ads_read` is granted.
+ */
+export async function backfillAdNames(pageId: string): Promise<BackfillResult> {
+  const g = await requireAdminTenant();
+  if (g.error) return { ok: false, updated: 0, adsResolved: 0, adsRefused: 0, error: g.error };
+
+  const admin = createAdminClient();
+
+  const { data: page } = await admin
+    .from("meta_lead_pages")
+    .select("access_token")
+    .eq("tenant_id", g.ctx.tenantId) // MANDATORY: service role bypasses RLS.
+    .eq("page_id", pageId)
+    .maybeSingle();
+  if (!page?.access_token) {
+    return { ok: false, updated: 0, adsResolved: 0, adsRefused: 0, error: "Page not found or not connected." };
+  }
+  const token = page.access_token as string;
+
+  try {
+    // Only this page's leads: a tenant may connect several Pages, and one Page's token
+    // must not be used to resolve another Page's ads.
+    const { data, error } = await admin
+      .from("leads")
+      .select("id, custom_fields")
+      .eq("tenant_id", g.ctx.tenantId)
+      .is("deleted_at", null)
+      .eq("custom_fields->>fb_page_id", pageId)
+      .not("custom_fields->>fb_ad_id", "is", null);
+    // The "already has a name" filter is applied in code (distinctAdIds / mergedCustomFields)
+    // rather than as a `.is(...->>fb_ad_name, null)` clause: both are correct in Postgres, but
+    // the code path is unit-tested and cannot silently match nothing if the operator changes.
+    if (error) throw new Error(error.message);
+
+    const rows = (data ?? []) as BackfillLeadRow[];
+    const adIds = distinctAdIds(rows);
+    if (adIds.length === 0) {
+      return { ok: true, updated: 0, adsResolved: 0, adsRefused: 0 };
+    }
+
+    // One Graph call per distinct ad, not per lead.
+    const names = new Map<string, string>();
+    let adsRefused = 0;
+    for (const adId of adIds) {
+      const name = await fetchAdName(adId, token);
+      if (name) names.set(adId, name);
+      else adsRefused++;
+    }
+
+    let updated = 0;
+    for (const row of rows) {
+      const merged = mergedCustomFields(row, names);
+      if (!merged) continue;
+      const { error: upErr } = await admin
+        .from("leads")
+        .update({ custom_fields: merged })
+        .eq("tenant_id", g.ctx.tenantId)
+        .eq("id", row.id);
+      if (upErr) throw new Error(`Updating a lead failed after ${updated} updated: ${upErr.message}`);
+      updated++;
+    }
+
+    if (updated > 0) revalidatePath("/leads");
+    return { ok: true, updated, adsResolved: names.size, adsRefused };
+  } catch (e) {
+    return {
+      ok: false, updated: 0, adsResolved: 0, adsRefused: 0,
+      error: e instanceof Error ? e.message : "Backfill failed.",
+    };
   }
 }
