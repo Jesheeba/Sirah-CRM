@@ -150,7 +150,13 @@ export async function importHistoricalLeads(pageId: string): Promise<ImportResul
 
     // One Graph call per distinct ad, not per lead (many leads share an ad).
     const adNames = new Map<string, string>();
+    // Meta returns ad_name on some lead nodes; that needs no ads permission, so
+    // take it first and only ask Graph about the ads still unnamed.
+    for (const { raw } of fresh) {
+      if (raw.ad_id && raw.ad_name?.trim()) adNames.set(raw.ad_id, raw.ad_name.trim());
+    }
     for (const adId of new Set(fresh.map((x) => x.raw.ad_id).filter((id): id is string => Boolean(id)))) {
+      if (adNames.has(adId)) continue;
       const name = await fetchAdName(adId, token);
       if (name) adNames.set(adId, name);
     }

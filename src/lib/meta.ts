@@ -228,6 +228,11 @@ export interface MetaLeadDetail {
   field_data: Array<{ name: string; values: string[] }>;
   platform?: string;
   ad_id?: string;
+  /** Meta sometimes returns the ad's name on the lead node itself. When it does,
+   *  no ads-permission Graph call is needed — see fetchAdName's fallback. */
+  ad_name?: string;
+  campaign_id?: string;
+  campaign_name?: string;
   form_id?: string;
   created_time?: string;
 }
@@ -236,12 +241,15 @@ export interface MetaLeadDetail {
 export async function fetchLeadDetail(leadgenId: string, pageToken: string): Promise<MetaLeadDetail> {
   const json = await graphFetch(leadgenId, {
     access_token: pageToken,
-    fields: "field_data,created_time,ad_id,form_id,platform",
+    fields: "field_data,created_time,ad_id,ad_name,campaign_id,campaign_name,form_id,platform",
   });
   return {
     field_data: (json.field_data ?? []) as MetaLeadDetail["field_data"],
     platform: json.platform as string | undefined,
     ad_id: json.ad_id as string | undefined,
+    ad_name: json.ad_name as string | undefined,
+    campaign_id: json.campaign_id as string | undefined,
+    campaign_name: json.campaign_name as string | undefined,
     form_id: json.form_id as string | undefined,
     created_time: json.created_time as string | undefined,
   };
@@ -393,6 +401,8 @@ export interface RawMetaLead {
   field_data: Array<{ name: string; values: string[] }>;
   created_time?: string;
   ad_id?: string;
+  ad_name?: string;
+  campaign_name?: string;
   form_id?: string;
   platform?: string;
 }
@@ -404,7 +414,7 @@ export async function fetchFormLeads(formId: string, pageToken: string): Promise
   do {
     const json = await graphFetch(`${formId}/leads`, {
       access_token: pageToken,
-      fields: "field_data,created_time,ad_id,form_id,platform",
+      fields: "field_data,created_time,ad_id,ad_name,campaign_id,campaign_name,form_id,platform",
       limit: "100",
       after,
     });

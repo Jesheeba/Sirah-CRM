@@ -83,9 +83,14 @@ export async function POST(req: NextRequest) {
           }
           if (detail.ad_id) {
             custom_fields.fb_ad_id = detail.ad_id;
-            const adName = await fetchAdName(detail.ad_id, page.access_token as string);
+            // Meta sometimes puts the name on the lead node itself; that costs no
+            // extra call and needs no ads permission. Only ask Graph if it didn't.
+            const adName =
+              detail.ad_name?.trim() ||
+              (await fetchAdName(detail.ad_id, page.access_token as string));
             if (adName) custom_fields.fb_ad_name = adName;
           }
+          if (detail.campaign_name) custom_fields.fb_campaign_name = detail.campaign_name;
           if (pageId) custom_fields.fb_page_id = pageId;
           if (detail.platform) custom_fields.fb_platform = detail.platform;
           // When the person actually submitted the form (the lead's created_at is arrival time).
