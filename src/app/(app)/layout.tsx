@@ -53,7 +53,7 @@ export default async function AppLayout({
         {rampStyle && <style dangerouslySetInnerHTML={{ __html: rampStyle }} />}
         <div className="flex min-h-screen">
           <Sidebar />
-          <div className="flex flex-1 flex-col">
+          <div className="flex min-w-0 flex-1 flex-col">
             <TopBar
               email={ctx.email}
               orgName={orgName}
