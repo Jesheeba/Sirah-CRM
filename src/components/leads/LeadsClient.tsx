@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -10,6 +10,7 @@ import PhoneInput from "@/components/ui/PhoneInput";
 import { cleanCustomValues, firstRequiredMissing } from "@/lib/customFields";
 import { DEFAULT_COUNTRY, isValidNationalNumber, toInternational } from "@/lib/countries";
 import { isValidEmail } from "@/lib/validation";
+import { LEADS_PAGE_SIZE, leadsHref, type LeadsQuery } from "@/lib/leads-list";
 import { LEAD_STATUSES, type CustomFieldDef, type Lead, type LeadStatus } from "@/lib/types";
 
 const STATUS_STYLES: Record<LeadStatus, string> = {
@@ -38,21 +39,34 @@ function leadName(l: Lead) {
 
 export default function LeadsClient({
   initialLeads,
+  total,
+  query,
+  formNames,
+  adNames,
   userId,
   defaultMine,
   customFields,
 }: {
   initialLeads: Lead[];
+  total: number;
+  query: LeadsQuery;
+  formNames: string[];
+  adNames: string[];
   userId: string;
   defaultMine: boolean;
   customFields: CustomFieldDef[];
 }) {
   const supabase = createClient();
   const router = useRouter();
+  const [navigating, startNav] = useTransition();
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
-  const [view, setView] = useState<"mine" | "all">(defaultMine ? "mine" : "all");
-  const [formFilter, setFormFilter] = useState("");
-  const [adFilter, setAdFilter] = useState("");
+  const [search, setSearch] = useState(query.q);
+  // A new page / filter arrives as fresh server props — show it, replacing local edits.
+  useEffect(() => setLeads(initialLeads), [initialLeads]);
+  useEffect(() => setSearch(query.q), [query.q]);
+  const { view, form: formFilter, ad: adFilter, sort } = query;
+  const go = (over: Partial<LeadsQuery>) =>
+    startNav(() => router.push(leadsHref(query, defaultMine, { page: 1, ...over })));
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [phoneCountry, setPhoneCountry] = useState(DEFAULT_COUNTRY);
@@ -61,7 +75,6 @@ export default function LeadsClient({
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Lead | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [scoreSort, setScoreSort] = useState<"none" | "desc" | "asc">("none");
   const [dupWarning, setDupWarning] = useState<Lead[] | null>(null);
 
   async function doCreate() {
@@ -170,21 +183,15 @@ export default function LeadsClient({
     const v = (l.custom_fields as Record<string, unknown> | null)?.[key];
     return typeof v === "string" ? v : "";
   };
-  const formOf = (l: Lead) => cfOf(l, "fb_form_name");
   // Fall back to the ad id so leads whose ad name Meta withheld are still groupable.
   const adOf = (l: Lead) => cfOf(l, "fb_ad_name") || cfOf(l, "fb_ad_id");
-  const formNames = [...new Set(leads.map(formOf).filter(Boolean))].sort();
-  const adNames = [...new Set(leads.map(adOf).filter(Boolean))].sort();
-  const byView = view === "mine" ? leads.filter((l) => l.owner_id === userId) : leads;
-  const byForm = formFilter ? byView.filter((l) => formOf(l) === formFilter) : byView;
-  const filtered = adFilter ? byForm.filter((l) => adOf(l) === adFilter) : byForm;
-  const visible =
-    scoreSort === "none"
-      ? filtered
-      : [...filtered].sort((a, b) => (scoreSort === "desc" ? b.score - a.score : a.score - b.score));
+  const visible = leads;
+  const pages = Math.max(1, Math.ceil(total / LEADS_PAGE_SIZE));
+  const firstRow = total === 0 ? 0 : (query.page - 1) * LEADS_PAGE_SIZE + 1;
+  const lastRow = Math.min(total, firstRow + visible.length - 1);
 
   function toggleScoreSort() {
-    setScoreSort((s) => (s === "none" ? "desc" : s === "desc" ? "asc" : "none"));
+    go({ sort: sort === "newest" ? "score_desc" : sort === "score_desc" ? "score_asc" : "newest" });
   }
 
   return (
@@ -194,7 +201,7 @@ export default function LeadsClient({
           <h1 className="text-xl font-bold text-slate-800">Leads</h1>
           <div className="inline-flex rounded-lg border border-slate-200 p-0.5 text-xs">
             <button
-              onClick={() => setView("mine")}
+              onClick={() => go({ view: "mine" })}
               className={`rounded-md px-2 py-1 font-medium ${
                 view === "mine" ? "bg-brand text-white" : "text-slate-600"
               }`}
@@ -202,7 +209,7 @@ export default function LeadsClient({
               My leads
             </button>
             <button
-              onClick={() => setView("all")}
+              onClick={() => go({ view: "all" })}
               className={`rounded-md px-2 py-1 font-medium ${
                 view === "all" ? "bg-brand text-white" : "text-slate-600"
               }`}
@@ -213,7 +220,7 @@ export default function LeadsClient({
           {formNames.length > 0 && (
             <select
               value={formFilter}
-              onChange={(e) => setFormFilter(e.target.value)}
+              onChange={(e) => go({ form: e.target.value })}
               aria-label="Filter by ad form"
               className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
             >
@@ -228,7 +235,7 @@ export default function LeadsClient({
           {adNames.length > 0 && (
             <select
               value={adFilter}
-              onChange={(e) => setAdFilter(e.target.value)}
+              onChange={(e) => go({ ad: e.target.value })}
               aria-label="Filter by ad"
               className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
             >
@@ -240,6 +247,21 @@ export default function LeadsClient({
               ))}
             </select>
           )}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              go({ q: search });
+            }}
+            role="search"
+          >
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, email, phone…"
+              aria-label="Search leads"
+              className="w-48 rounded-lg border border-slate-200 px-2 py-1 text-xs outline-none focus:border-brand"
+            />
+          </form>
         </div>
         <div className="flex gap-2">
           <Link
@@ -367,8 +389,8 @@ export default function LeadsClient({
                   title="Sort by score"
                 >
                   Score
-                  {scoreSort === "desc" && <span>▼</span>}
-                  {scoreSort === "asc" && <span>▲</span>}
+                  {sort === "score_desc" && <span>▼</span>}
+                  {sort === "score_asc" && <span>▲</span>}
                 </button>
               </th>
               <th className="px-4 py-3">Ad</th>
@@ -380,9 +402,11 @@ export default function LeadsClient({
             {visible.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
-                  {view === "mine"
-                    ? "No leads owned by you yet."
-                    : "No leads yet — click “Add lead” to capture your first prospect."}
+                  {query.q || formFilter || adFilter
+                    ? "No leads match your search."
+                    : view === "mine"
+                      ? "No leads owned by you yet."
+                      : "No leads yet — click “Add lead” to capture your first prospect."}
                 </td>
               </tr>
             )}
@@ -467,6 +491,33 @@ export default function LeadsClient({
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-slate-500" aria-live="polite">
+        <span>
+          {navigating ? "Loading…" : total === 0 ? "0 leads" : `${firstRow}–${lastRow} of ${total}`}
+        </span>
+        {pages > 1 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => go({ page: query.page - 1 })}
+              disabled={query.page <= 1 || navigating}
+              className="rounded-lg border border-slate-200 px-3 py-1 hover:bg-slate-50 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span>
+              Page {query.page} of {pages}
+            </span>
+            <button
+              onClick={() => go({ page: query.page + 1 })}
+              disabled={query.page >= pages || navigating}
+              className="rounded-lg border border-slate-200 px-3 py-1 hover:bg-slate-50 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       {pendingDelete && (
