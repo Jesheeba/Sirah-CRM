@@ -197,7 +197,7 @@ export default function LeadsClient({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-bold text-slate-800">Leads</h1>
           <div className="inline-flex rounded-lg border border-slate-200 p-0.5 text-xs">
             <button
