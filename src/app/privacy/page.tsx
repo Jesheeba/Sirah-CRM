@@ -83,9 +83,18 @@ export default function PrivacyPolicy() {
             <li><code className="text-sm bg-slate-100 px-1 rounded">pages_manage_metadata</code> — subscribe Pages to lead webhooks</li>
             <li><code className="text-sm bg-slate-100 px-1 rounded">leads_retrieval</code> — read lead form submissions</li>
             <li><code className="text-sm bg-slate-100 px-1 rounded">pages_read_engagement</code> — read basic Page info</li>
-            <li><code className="text-sm bg-slate-100 px-1 rounded">pages_manage_ads</code> — subscribe to ad lead events</li>
+            <li><code className="text-sm bg-slate-100 px-1 rounded">pages_manage_ads</code> — list the lead forms on your Page so you can import your past leads</li>
             <li><code className="text-sm bg-slate-100 px-1 rounded">business_management</code> — list Business-managed Pages</li>
             <li><code className="text-sm bg-slate-100 px-1 rounded">ads_management</code> — read the name of the ad a lead came from</li>
+          </ul>
+          <p className="mt-3 text-slate-600 leading-relaxed">
+            When you use the &quot;Connect Instagram&quot; feature, you authorise Sirah CRM to access the
+            Instagram professional account linked to your Page using the following permissions:
+          </p>
+          <ul className="mt-2 list-disc pl-5 space-y-1 text-slate-600">
+            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_basic</code> — show the name and username of the connected Instagram account</li>
+            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_manage_messages</code> — receive direct messages sent to your account and send the replies you write in the CRM</li>
+            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_manage_comments</code> — receive comments on your posts and send the replies you approve in the CRM</li>
           </ul>
           <p className="mt-3 text-slate-600 leading-relaxed">
             Page Access Tokens are stored securely and used only to retrieve leads on your behalf.
