@@ -78,3 +78,11 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
 - Removed `ads_management` from `META_SCOPES_FACEBOOK`, the privacy page, the "ads not granted" banner and its
   `fetchGrantedScopes` check (now unused). Ad names: `META_ADS_TOKEN` (System User) or the ad id.
 - New `meta-scopes.test.ts`: every requested scope is approved or in the submission and explained on the privacy page.
+
+## 2026-11-18 — feat(ig-inbox): Social inbox for comments, mentions, tags and DMs (MLA desk F3)
+- New `/social` (server-paged 50/page, URL state: type, status, mine, search) and `/social/[id]` (DM history or
+  comment thread, permalink, reply slot for F4). Admins/Managers assign, ignore/restore and "Refresh tagged posts";
+  Reps read. All writes are tenant-checked server actions; assignee must be in the same organization.
+- New opt-in module `social` in branding: hidden unless a tenant turns it on (Settings → Branding → modules), so
+  other tenants don't get an empty menu. Branding settings now load/save opt-in modules correctly.
+- `lib/social-list.ts`: URL parsing (sanitised search) and status rules (assign/unassign, ignore/restore).

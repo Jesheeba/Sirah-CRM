@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import ImageUploadField from "@/components/settings/ImageUploadField";
 import {
   TOGGLEABLE_MODULES,
+  OPT_IN_MODULES,
   DEFAULT_LABELS,
   isValidHex,
   type ModuleKey,
@@ -74,7 +75,7 @@ export default function BrandingClient({ initial }: { initial: BrandingFormIniti
     }
 
     // Keep only meaningful entries: label overrides that differ from blank, and
-    // module_visibility entries that are explicitly disabled.
+    // module_visibility entries that differ from the default (opt-in modules default off).
     const labelOverrides: Record<string, string> = {};
     for (const k of TOGGLEABLE_MODULES) {
       const v = (labels[k] ?? "").trim();
@@ -82,7 +83,8 @@ export default function BrandingClient({ initial }: { initial: BrandingFormIniti
     }
     const visibilityOverrides: Record<string, boolean> = {};
     for (const k of TOGGLEABLE_MODULES) {
-      if (visibility[k] === false) visibilityOverrides[k] = false;
+      const on = visibility[k] ?? !OPT_IN_MODULES.has(k);
+      if (on !== !OPT_IN_MODULES.has(k)) visibilityOverrides[k] = on;
     }
 
     setBusy(true);

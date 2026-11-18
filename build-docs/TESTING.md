@@ -86,3 +86,17 @@ connected test account and migration 0065. Verify on the live site: comment from
 
 ## meta-scopes (F10 prep) — 2026-11-18
 `src/lib/meta-scopes.test.ts` (3): no `ads_management`; every requested scope is approved or submitted; privacy page lists each. Full suite 196 pass; `tsc` clean.
+
+## ig-inbox (F3) — 2026-11-18
+`social-list.test.ts` (11) and `__tests__/social-actions.test.ts` (11). Full suite 218 pass; `tsc` clean; `next build` OK.
+
+| Acceptance criterion | Test | Result |
+|---|---|---|
+| Filters + paging via URL, survives reload | URL state › links keep only non-default values and survive a round trip | pass |
+| Hostile search text sanitised | URL state › search text is sanitised… | pass |
+| Rep cannot assign/ignore/refresh (server-checked) | assign › a manager may…; ignore › a rep cannot…; refresh › a rep cannot… | pass |
+| Tenant isolation on every write | assign › cannot touch another organization's item / assign to someone in another organization | pass |
+| Status rules | status rules (3) | pass |
+| Opt-in module hidden for other tenants | Social module is opt-in (3) | pass |
+
+Live check (Playwright, throwaway tenant): see the run recorded after deploy.

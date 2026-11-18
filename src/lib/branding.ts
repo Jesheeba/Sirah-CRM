@@ -14,6 +14,7 @@ export const MODULE_KEYS = [
   "invoices",
   "email",
   "whatsapp",
+  "social",
   "tasks",
   "calendar",
   "reports",
@@ -26,6 +27,10 @@ export const TOGGLEABLE_MODULES: ModuleKey[] = MODULE_KEYS.filter(
   (k) => k !== "dashboard",
 );
 
+/** Opt-in modules: hidden unless a tenant switches them on. The Instagram social desk is only
+ *  useful once an Instagram account is connected, so other tenants don't see an empty menu. */
+export const OPT_IN_MODULES: ReadonlySet<ModuleKey> = new Set<ModuleKey>(["social"]);
+
 export const DEFAULT_LABELS: Record<ModuleKey, string> = {
   dashboard: "Dashboard",
   leads: "Leads",
@@ -37,6 +42,7 @@ export const DEFAULT_LABELS: Record<ModuleKey, string> = {
   invoices: "Invoices",
   email: "Email",
   whatsapp: "WhatsApp",
+  social: "Social",
   tasks: "Tasks",
   calendar: "Calendar",
   reports: "Reports",
@@ -73,9 +79,7 @@ export function defaultBranding(): Branding {
     welcomeMessage: null,
     companyDescription: null,
     labels: { ...DEFAULT_LABELS },
-    visibility: Object.fromEntries(
-      MODULE_KEYS.map((k) => [k, true]),
-    ) as Record<ModuleKey, boolean>,
+    visibility: resolveVisibility({}),
   };
 }
 
@@ -101,16 +105,18 @@ export function resolveLabels(
   return out;
 }
 
-/** Resolve module visibility — every module is visible unless explicitly `false`. */
+/** Resolve module visibility — a module is visible unless explicitly `false`; an opt-in
+ *  module is hidden unless explicitly `true`. */
 export function resolveVisibility(
   overrides: Record<string, unknown>,
 ): Record<ModuleKey, boolean> {
-  const out = Object.fromEntries(MODULE_KEYS.map((k) => [k, true])) as Record<
+  const out = Object.fromEntries(MODULE_KEYS.map((k) => [k, !OPT_IN_MODULES.has(k)])) as Record<
     ModuleKey,
     boolean
   >;
   for (const k of TOGGLEABLE_MODULES) {
     if (overrides[k] === false) out[k] = false;
+    if (overrides[k] === true) out[k] = true;
   }
   return out;
 }

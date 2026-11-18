@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserContext } from "@/lib/auth";
-import { TOGGLEABLE_MODULES } from "@/lib/branding";
+import { TOGGLEABLE_MODULES, resolveVisibility } from "@/lib/branding";
 import BrandingClient, {
   type BrandingFormInitial,
 } from "@/components/settings/BrandingClient";
@@ -45,7 +45,7 @@ export default async function BrandingPage() {
       TOGGLEABLE_MODULES.map((k) => [k, str(labelOverrides[k])]),
     ),
     visibility: Object.fromEntries(
-      TOGGLEABLE_MODULES.map((k) => [k, visibilityOverrides[k] !== false]),
+      TOGGLEABLE_MODULES.map((k) => [k, resolveVisibility(visibilityOverrides)[k]]),
     ),
   };
 
