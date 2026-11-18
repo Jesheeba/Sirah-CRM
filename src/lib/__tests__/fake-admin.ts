@@ -54,6 +54,11 @@ class FakeQuery implements PromiseLike<{ data: Row[] | Row | null; error: null; 
     this.filtered = this.filtered.filter((r) => r[col] === val);
     return this;
   }
+  /** `.is(col, null)` matches missing or null, like Postgres `IS NULL`. */
+  is(col: string, val: unknown) {
+    this.filtered = this.filtered.filter((r) => (val === null ? r[col] == null : r[col] === val));
+    return this;
+  }
   in(col: string, vals: unknown[]) {
     this.filtered = this.filtered.filter((r) => vals.includes(r[col]));
     return this;

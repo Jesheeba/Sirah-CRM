@@ -99,7 +99,7 @@ export default async function LeadDetail({
   const definedKeys = new Set(customFields.map((f) => f.key));
   const cf = (lead.custom_fields ?? {}) as Record<string, unknown>;
   const prettify = (k: string) => k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
-  const answerEntries = Object.entries(cf).filter(([k]) => !definedKeys.has(k) && !k.startsWith("fb_"));
+  const answerEntries = Object.entries(cf).filter(([k]) => !definedKeys.has(k) && !k.startsWith("fb_") && !k.startsWith("ig_"));
 
   return (
     <div className="space-y-4">
@@ -148,6 +148,15 @@ export default async function LeadDetail({
             <div className="px-2 py-1 text-sm text-slate-600">
               Source: <span className="font-medium text-slate-800">{lead.source || "—"}</span>
             </div>
+            {typeof cf.ig_interaction_id === "string" && (
+              <div className="px-2 py-1 text-sm text-slate-600">
+                Instagram:{" "}
+                <Link href={`/social/${cf.ig_interaction_id}`} className="font-medium text-brand hover:underline">
+                  {typeof cf.ig_handle === "string" ? `@${cf.ig_handle}` : "open"} — view in Social
+                </Link>
+                {typeof cf.ig_text === "string" && <p className="mt-1 whitespace-pre-wrap text-slate-700">“{cf.ig_text}”</p>}
+              </div>
+            )}
             {typeof cf.fb_form_name === "string" && (
               <div className="px-2 py-1 text-sm text-slate-600">
                 Ad form: <span className="font-medium text-slate-800">{cf.fb_form_name}</span>

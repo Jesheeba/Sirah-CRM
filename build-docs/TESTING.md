@@ -133,3 +133,15 @@ Full suite 313 pass; `tsc` clean; `next build` OK.
 | Admin-only, tenant isolation | actions › managers and reps can't…; can't attach… another organization's | pass |
 
 F4 live: 28/28 on the deployed site (see CHANGELOG).
+
+## ig-to-issue (F5) — 2026-11-18
+`__tests__/ig-issue.test.ts` (10). Full suite 323 pass; `tsc` clean; `next build` OK.
+
+| Acceptance criterion | Test | Result |
+|---|---|---|
+| One click → exactly one lead with correct source and fields | create issue › one click creates exactly one lead… | pass |
+| Second click returns the same lead | › a second click returns the same lead | pass |
+| Same person within 30 days → attach, not duplicate (not old / converted / other person / deleted) | › the same person's recent open lead is reused…; › …but not an old or converted one…; › a deleted lead doesn't count | pass |
+| Interaction status becomes issue; lead links back | › one click… (status issue, lead_id) | pass |
+| Existing Meta-lead feed output unchanged | regressions › the Meta lead pull feed is unchanged… | pass |
+| Tenant isolation | › can't turn another organization's item into a lead | pass |

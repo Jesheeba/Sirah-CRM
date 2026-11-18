@@ -5,8 +5,10 @@ import { getUserContext } from "@/lib/auth";
 import { formatWhen } from "@/lib/social-list";
 import { allowedChannels, checkWindow, type ReplyChannel, type ReplyTarget } from "@/lib/ig-reply";
 import ReplyPanel, { type ReplyRow } from "@/components/social/ReplyPanel";
+import IssueButton from "@/components/social/IssueButton";
+import { fetchBranding } from "@/lib/branding";
 
-const COLS = "id, kind, author_id, author_handle, text, permalink, media_id, parent_id, provider_id, ig_account_id, created_at_provider, received_at, status";
+const COLS = "id, kind, author_id, author_handle, text, permalink, media_id, parent_id, provider_id, ig_account_id, created_at_provider, received_at, status, lead_id";
 type Row = {
   id: string;
   kind: string;
@@ -21,6 +23,7 @@ type Row = {
   created_at_provider: string | null;
   received_at: string;
   status: string;
+  lead_id: string | null;
 };
 
 /** One interaction with its context: the DM history with that person, or the comment's thread. */
@@ -61,7 +64,7 @@ export default async function SocialItemPage({ params }: { params: Promise<{ id:
     thread = (t ?? []) as Row[];
   }
 
-  const [{ data: replies }, { data: settings }, { data: members }] = await Promise.all([
+  const [{ data: replies }, { data: settings }, { data: members }, branding] = await Promise.all([
     supabase
       .from("ig_replies")
       .select("id, channel, body, status, drafted_by, approved_by, error, created_at, sent_at")
@@ -69,6 +72,7 @@ export default async function SocialItemPage({ params }: { params: Promise<{ id:
       .order("created_at", { ascending: true }),
     supabase.from("ig_desk_settings").select("reply_mode, allow_self_approve").maybeSingle(),
     supabase.from("profiles").select("id, full_name, email"),
+    fetchBranding(supabase, ctx.tenantId!),
   ]);
   const replyRows = (replies ?? []) as ReplyRow[];
   const names = Object.fromEntries(
@@ -106,11 +110,14 @@ export default async function SocialItemPage({ params }: { params: Promise<{ id:
         </div>
         <p className="mt-2 text-lg font-semibold text-slate-800">{it.author_handle ? `@${it.author_handle}` : "Unknown sender"}</p>
         <p className="mt-2 whitespace-pre-wrap break-words text-slate-700">{it.text?.trim() || <span className="italic text-slate-400">(no text)</span>}</p>
-        {it.permalink && (
-          <a href={it.permalink} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm text-brand hover:underline">
-            View on Instagram ↗
-          </a>
-        )}
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          {it.permalink && (
+            <a href={it.permalink} target="_blank" rel="noopener noreferrer" className="text-sm text-brand hover:underline">
+              View on Instagram ↗
+            </a>
+          )}
+          <IssueButton interactionId={it.id} leadId={it.lead_id} label={branding.labels.leads} />
+        </div>
       </div>
 
       {thread.length > 1 && (

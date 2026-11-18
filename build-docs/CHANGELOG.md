@@ -112,3 +112,12 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
   `lib/ig-rule-runner.ts`, `social/rules/{page,actions}.ts`, `components/social/RulesManager.tsx`.
 - F4 live run (Playwright, throwaway tenant): 28/28 — draft → approval → failed-with-reason → retry → reject,
   audit trail, self-approve setting, tagged post not answerable.
+
+## 2026-11-18 — feat(ig-to-issue): turn a comment, mention or DM into a lead / citizen issue (MLA desk F5)
+- Detail page button "Add to {Leads label}" (follows the tenant's label, e.g. "Issues"); then "Open in …".
+- One lead per item (second click returns it); the same person's open lead from the last 30 days is reused
+  instead of a duplicate; owner = the item's assignee, else whoever clicked; source "Instagram Comment /
+  Mention / Message"; `ig_*` custom fields keep handle, text, link and the item id. Item status → issue.
+- Lead page shows the Instagram origin with a link back to Social; `ig_*` keys stay out of "Captured form answers".
+- Meta lead pull feed unaffected (it only exports leads with `fb_leadgen_id`). No migration.
+- Test helper `fake-admin.ts`: added `.is()`.

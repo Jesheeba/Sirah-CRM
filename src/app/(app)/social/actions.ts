@@ -5,6 +5,7 @@ import { getUserContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pollIgTags } from "@/lib/ig-ingest";
 import { statusAfterAssign, statusAfterIgnore, type SocialStatus } from "@/lib/social-list";
+import { issueLeadFields, pickExistingLead } from "@/lib/ig-issue";
 
 export interface SocialActionResult {
   ok: boolean;
@@ -77,6 +78,93 @@ export async function setInteractionIgnored(id: string, ignore: boolean): Promis
   if (error) return { ok: false, error: error.message };
   revalidatePath("/social");
   return { ok: true };
+}
+
+export interface IssueResult {
+  ok: boolean;
+  error?: string;
+  leadId?: string;
+  /** "existing" = this item was already linked; "attached" = linked to the person's recent open lead. */
+  how?: "created" | "existing" | "attached";
+}
+
+/**
+ * Turn an item into a lead / citizen issue (F5). Any member may do it. One lead per item; the
+ * same person's recent open lead is reused instead of creating a duplicate.
+ */
+export async function createIssueFromInteraction(id: string): Promise<IssueResult> {
+  const ctx = await getUserContext();
+  if (!ctx?.tenantId) return { ok: false, error: "Not authenticated." };
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from("ig_interactions")
+    .select("id, ig_account_id, kind, author_handle, text, permalink, assigned_to, lead_id, status")
+    .eq("id", id)
+    .eq("tenant_id", ctx.tenantId) // MANDATORY: service role bypasses RLS.
+    .maybeSingle();
+  const it = data as {
+    id: string; ig_account_id: string; kind: string; author_handle: string | null; text: string | null;
+    permalink: string | null; assigned_to: string | null; lead_id: string | null; status: string;
+  } | null;
+  if (!it) return { ok: false, error: "Item not found." };
+
+  const live = async (leadId: string) => {
+    const { data: l } = await admin.from("leads").select("id").eq("id", leadId).eq("tenant_id", ctx.tenantId!).is("deleted_at", null).maybeSingle();
+    return Boolean(l);
+  };
+  const link = async (leadId: string) => {
+    await admin
+      .from("ig_interactions")
+      .update({ lead_id: leadId, status: it.status === "ignored" || it.status === "deleted" ? it.status : "issue" })
+      .eq("id", it.id)
+      .eq("tenant_id", ctx.tenantId!);
+    revalidatePath(`/social/${it.id}`);
+    revalidatePath("/social");
+  };
+
+  if (it.lead_id && (await live(it.lead_id))) return { ok: true, leadId: it.lead_id, how: "existing" };
+
+  if (it.author_handle) {
+    const { data: same } = await admin
+      .from("ig_interactions")
+      .select("lead_id")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("ig_account_id", it.ig_account_id)
+      .eq("author_handle", it.author_handle);
+    const ids = [...new Set(((same ?? []) as { lead_id: string | null }[]).map((r) => r.lead_id).filter((x): x is string => Boolean(x)))];
+    if (ids.length) {
+      const { data: leads } = await admin
+        .from("leads")
+        .select("id, created_at, status")
+        .eq("tenant_id", ctx.tenantId)
+        .is("deleted_at", null)
+        .in("id", ids);
+      const reuse = pickExistingLead((leads ?? []) as { id: string; created_at: string; status: string }[]);
+      if (reuse) {
+        await link(reuse);
+        return { ok: true, leadId: reuse, how: "attached" };
+      }
+    }
+  }
+
+  const fields = issueLeadFields(it);
+  const { data: created, error } = await admin
+    .from("leads")
+    .insert({
+      tenant_id: ctx.tenantId,
+      ...fields,
+      status: "new",
+      score: 0,
+      owner_id: it.assigned_to ?? ctx.userId,
+      created_by: ctx.userId,
+    })
+    .select("id");
+  const leadId = ((created ?? []) as { id: string }[])[0]?.id;
+  if (error || !leadId) return { ok: false, error: error?.message ?? "Could not create the lead." };
+  await link(leadId);
+  revalidatePath("/leads");
+  return { ok: true, leadId, how: "created" };
 }
 
 /** Pull new posts that tag this organization's Instagram account(s) now, instead of waiting for the daily run. */
