@@ -116,3 +116,20 @@ Live check (Playwright, throwaway tenant): see the run recorded after deploy.
 | Tenant isolation on submit / approve / reject; only admins change mode | › another organization can't…; › only admins change the reply mode | pass |
 
 Not covered yet: real Graph calls (needs the IG keys, a connected test account and migration 0066). Live check planned after deploy.
+
+## ig-keyword-rules (F9) — 2026-11-18
+`ig-rules.test.ts` (52 incl. 35 sample comments), `__tests__/ig-rule-runner.test.ts` (10), `__tests__/ig-rules-actions.test.ts` (7).
+Full suite 313 pass; `tsc` clean; `next build` OK.
+
+| Acceptance criterion | Test | Result |
+|---|---|---|
+| ≥30 sample comments (EN/TA/HI, emoji, case, near-miss) give the expected rule or none | resolver — 35 sample comments | pass |
+| Blocklist comment never auto-sends | runner › a blocklist word never auto-sends; resolver blocklist cases | pass |
+| Own-account comment never triggers | resolver › own account never fires | pass |
+| Same comment delivered twice → one reply | runner › the same item processed twice fires only once | pass |
+| DM rule only by DM; tags skipped | runner › a DM rule answers by DM; tags are skipped… | pass |
+| "Test a comment" = live resolver, sends nothing | actions › shows which rule fires… and sends nothing | pass |
+| Kill switch, caps, per-person cooldown → queued, not sent | runner › kill switch / hourly cap / same person within 10 minutes | pass |
+| Admin-only, tenant isolation | actions › managers and reps can't…; can't attach… another organization's | pass |
+
+F4 live: 28/28 on the deployed site (see CHANGELOG).

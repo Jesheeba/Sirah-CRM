@@ -7,6 +7,21 @@ export interface IngestResult {
   duplicate: number;
   ignored: number;
   unknownAccount: number;
+  /** Newly stored, answerable items (not the account's own) — input for keyword rules. */
+  created: CreatedInteraction[];
+}
+
+export interface CreatedInteraction {
+  id: string;
+  tenant_id: string;
+  ig_account_id: string;
+  kind: IgEvent["kind"];
+  provider_id: string;
+  author_id: string | null;
+  text: string | null;
+  media_id: string | null;
+  created_at_provider: string | null;
+  received_at: string;
 }
 
 interface Account {
@@ -29,7 +44,7 @@ export async function ingestIgEvents(
   deps: { enrich?: EnrichFn } = {},
 ): Promise<IngestResult> {
   const enrich = deps.enrich ?? fetchMention;
-  const out: IngestResult = { stored: 0, duplicate: 0, ignored: 0, unknownAccount: 0 };
+  const out: IngestResult = { stored: 0, duplicate: 0, ignored: 0, unknownAccount: 0, created: [] };
   const accounts = new Map<string, Account | null>();
 
   const byAccount = new Map<string, IgEvent[]>();
@@ -79,7 +94,8 @@ export async function ingestIgEvents(
       }
 
       const own = ev.authorId === acc.ig_user_id;
-      const { error } = await admin.from("ig_interactions").insert({
+      const receivedAt = new Date().toISOString();
+      const { data: inserted, error } = await admin.from("ig_interactions").insert({
         tenant_id: acc.tenant_id,
         ig_account_id: acc.id,
         kind: ev.kind,
@@ -92,14 +108,25 @@ export async function ingestIgEvents(
         parent_id: ev.parentId,
         created_at_provider: occurredAt,
         status: own ? "ignored" : "new",
+        received_at: receivedAt,
         raw: ev.raw,
-      });
+      }).select("id");
       if (error) {
         if ((error as { code?: string }).code === "23505") out.duplicate++; // lost a race to a parallel delivery
         continue;
       }
-      if (own) out.ignored++;
-      else out.stored++;
+      if (own) {
+        out.ignored++;
+        continue;
+      }
+      out.stored++;
+      const id = ((inserted ?? []) as { id: string }[])[0]?.id;
+      if (id) {
+        out.created.push({
+          id, tenant_id: acc.tenant_id, ig_account_id: acc.id, kind: ev.kind, provider_id: ev.providerId,
+          author_id: ev.authorId, text, media_id: mediaId, created_at_provider: occurredAt, received_at: receivedAt,
+        });
+      }
     }
   }
   return out;

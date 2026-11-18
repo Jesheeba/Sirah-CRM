@@ -133,6 +133,12 @@ export default function SocialInbox({
           <h1 className="text-xl font-bold text-slate-800">Social</h1>
           <span className="text-xs text-slate-500">{accounts.map((a) => `@${a.username ?? "account"}`).join(" · ")}</span>
         </div>
+        <div className="flex flex-wrap gap-2">
+        {isAdmin && (
+          <Link href="/social/rules" className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+            Automatic replies
+          </Link>
+        )}
         {canManage && (
           <button
             onClick={() => run("refresh", refreshTaggedPosts, "Checked for tagged posts — {n} new.")}
@@ -142,6 +148,7 @@ export default function SocialInbox({
             {busy === "refresh" ? "Checking…" : "Refresh tagged posts"}
           </button>
         )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Filters">

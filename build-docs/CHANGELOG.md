@@ -98,3 +98,17 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
   `lib/ig-send.ts` (Graph writes), `social/reply-actions.ts`, `components/social/ReplyPanel.tsx`.
 - Test helper `fake-admin.ts`: `.select()` after a write now returns the affected rows (as Postgrest does).
 - No AI in this phase (Phase B, after the Meta submission).
+
+## 2026-11-18 — feat(ig-keyword-rules): automatic replies by keyword (MLA desk F9)
+- `/social/rules` (admins): rules for comments, mentions or DMs — keywords (any/all, whole words, any language)
+  or catch-all; public reply, private reply, both, or DM reply; "post automatically" or "wait for approval";
+  priority; optional one-post or one-account scope; enable/disable; delete.
+- Safety (per organization): blocklist words always go to a person; kill switch; hourly/daily caps and a
+  10-minute per-person cooldown — over a limit the rule's reply waits for approval instead of posting.
+- "Test a comment" box runs the live matcher on sample text and sends nothing.
+- Runner fires once per new item from the webhook (never on retries), through the same guarded `deliver`
+  path as approved replies (windows, audit, failure handling). Send path moved to `lib/ig-reply-deliver.ts`.
+- New: migration 0067 (`ig_rules`, safety columns on `ig_desk_settings`), `lib/ig-rules.ts` (pure),
+  `lib/ig-rule-runner.ts`, `social/rules/{page,actions}.ts`, `components/social/RulesManager.tsx`.
+- F4 live run (Playwright, throwaway tenant): 28/28 — draft → approval → failed-with-reason → retry → reject,
+  audit trail, self-approve setting, tagged post not answerable.

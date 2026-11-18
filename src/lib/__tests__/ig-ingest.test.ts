@@ -82,7 +82,7 @@ describe("F2 ingest", () => {
     expect(t.ig_interactions[0].text).toBeNull();
   });
   it("an empty batch is a no-op", async () => {
-    expect(await ingestIgEvents(asClient(t), [])).toEqual({ stored: 0, duplicate: 0, ignored: 0, unknownAccount: 0 });
+    expect(await ingestIgEvents(asClient(t), [])).toEqual({ stored: 0, duplicate: 0, ignored: 0, unknownAccount: 0, created: [] });
   });
 });
 

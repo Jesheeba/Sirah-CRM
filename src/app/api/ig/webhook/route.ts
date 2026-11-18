@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { metaVerifyToken } from "@/lib/meta";
 import { parseIgWebhook, verifyIgSignature } from "@/lib/ig-webhook";
 import { ingestIgEvents } from "@/lib/ig-ingest";
+import { applyIgRules } from "@/lib/ig-rule-runner";
 
 /** Webhook verification handshake (Meta calls GET once when the callback URL is saved). */
 export async function GET(req: NextRequest) {
@@ -27,7 +28,12 @@ export async function POST(req: NextRequest) {
   }
   try {
     const events = parseIgWebhook(JSON.parse(raw));
-    if (events.length) await ingestIgEvents(createAdminClient(), events);
+    if (events.length) {
+      const admin = createAdminClient();
+      const { created } = await ingestIgEvents(admin, events);
+      // Keyword rules run only on items that are new in this delivery, so a retry never re-fires them.
+      if (created.length) await applyIgRules(admin, created).catch(() => null);
+    }
   } catch {
     // swallow — always 200
   }
