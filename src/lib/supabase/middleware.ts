@@ -23,6 +23,8 @@ const PUBLIC_PREFIXES = [
   "/api/meta/instagram-webhook", // Instagram DM webhook (own HMAC verify, same as leadgen)
   "/api/meta/data-deletion", // Meta data-deletion callback (server-to-server)
   "/api/ig/webhook", // Instagram Login webhook (comments/mentions/messages) — own HMAC verify
+  "/api/ig/deauthorize", // Instagram Login deauthorize callback — verifies signed_request
+  "/api/ig/data-deletion", // Instagram Login data-deletion callback — verifies signed_request
   "/api/payments/razorpay/webhook/", // Razorpay server-to-server callback
   "/api/leads/capture", // web-to-lead capture, called from external landing pages
   "/api/export/facebook-leads", // Meta lead pull feed — authorized by its own ?token=, not a session

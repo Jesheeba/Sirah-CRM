@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { META_SCOPES_FACEBOOK, META_SCOPES_INSTAGRAM } from "./meta";
+import { IG_SCOPES } from "./ig-login";
 
 // App Review: every permission the Connect buttons request must be approved or in the
 // submission, and listed on the privacy page — a requested-but-unsubmitted scope is a mismatch.
@@ -15,6 +16,12 @@ describe("F10 scopes match the App Review submission", () => {
   });
   it("requests only approved or submitted permissions", () => {
     for (const s of requested) expect([...APPROVED, ...IN_SUBMISSION]).toContain(s);
+  });
+  it("the Instagram Login connect requests exactly the MLA submission set, and the privacy page explains it", () => {
+    expect(IG_SCOPES.split(",").sort()).toEqual(["instagram_business_basic", "instagram_business_manage_comments", "instagram_business_manage_messages"]);
+    const privacy = readFileSync("src/app/privacy/page.tsx", "utf8");
+    for (const s of IG_SCOPES.split(",")) expect(privacy).toContain(s);
+    for (const f of ["comments", "mentions", "messages"]) expect(privacy).toContain(`>${f}</code>`);
   });
   it("the privacy page explains every requested permission and no longer lists ads_management", () => {
     const privacy = readFileSync("src/app/privacy/page.tsx", "utf8");

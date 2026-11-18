@@ -96,6 +96,29 @@ export default function PrivacyPolicy() {
             <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_manage_comments</code> — receive comments on your posts and send the replies you approve in the CRM</li>
           </ul>
           <p className="mt-3 text-slate-600 leading-relaxed">
+            <strong>Instagram accounts without a Facebook Page.</strong> When you use &quot;Connect Instagram&quot; under
+            Settings → Integrations (sign in with Instagram), you authorise Sirah CRM to access that Instagram professional
+            account using the following permissions:
+          </p>
+          <ul className="mt-2 list-disc pl-5 space-y-1 text-slate-600">
+            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_business_basic</code> — show the account&apos;s name and username, read its posts and the posts that tag it</li>
+            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_business_manage_comments</code> — receive comments and @mentions and post the replies your team writes or approves</li>
+            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_business_manage_messages</code> — receive direct messages and send the replies your team writes or approves (within Instagram&apos;s 24-hour window)</li>
+          </ul>
+          <p className="mt-3 text-slate-600 leading-relaxed">
+            We subscribe to the <code className="text-sm bg-slate-100 px-1 rounded">comments</code>,{" "}
+            <code className="text-sm bg-slate-100 px-1 rounded">mentions</code> and{" "}
+            <code className="text-sm bg-slate-100 px-1 rounded">messages</code> webhook fields so new items arrive as they happen.
+            We store, for your organization only: the commenter&apos;s or sender&apos;s Instagram username and id, the text, the
+            post link and time, and the replies sent with who wrote and approved them. Automatic replies only use rules your
+            organization writes; messages containing words on your blocklist always go to a person. The access token is
+            stored server-side only and renewed automatically; disconnecting in Settings → Integrations revokes it at once.
+            If you remove the app in Instagram, we stop using the account immediately; a data deletion request from Instagram
+            deletes the connected account and every comment, mention, message and reply we stored for it (CRM records your
+            team created from them remain your organization&apos;s records). Status is shown at{" "}
+            <a href="/data-deletion-status" className="text-blue-600 underline">/data-deletion-status</a>.
+          </p>
+          <p className="mt-3 text-slate-600 leading-relaxed">
             Page Access Tokens are stored securely and used only to retrieve leads on your behalf.
             You can disconnect any Page at any time from Settings → Integrations, which immediately
             revokes our access.

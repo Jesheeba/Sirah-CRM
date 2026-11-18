@@ -156,3 +156,14 @@ F4 live: 28/28 on the deployed site (see CHANGELOG).
 | Existing branding kept | merge helpers › keeps the tenant's other labels and hidden modules | pass |
 | Only platform admins; unknown tenant refused | setup › only platform admins can run it or read the status… | pass |
 | Drafter can't approve, approver can | covered by F4 (ig-reply-actions: rep can't approve, manager can) | pass |
+
+## meta-review-readiness (F8) — 2026-11-18
+`__tests__/ig-data-deletion.test.ts` (13), `meta-scopes.test.ts` (+1). Full suite 343 pass; `tsc` clean; `next build` OK.
+
+| Acceptance criterion | Test | Result |
+|---|---|---|
+| Callbacks return correctly (200 valid / 400 forged) | deauthorize › …; data-deletion › … | pass |
+| Signed request verified (wrong secret, tamper, alg, missing user, unset secret) | signed_request (8) | pass |
+| Deletion removes the account's data and confirms via the status page | data-deletion › deletes the account's data…; schema cascades | pass |
+| Privacy lists every requested permission + webhook fields | meta-scopes › Instagram Login connect… / privacy page explains every… | pass |
+| Reviewer kit and checklist exist | build-docs/meta-review-kit.md | done |

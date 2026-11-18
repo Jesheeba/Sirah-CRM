@@ -131,3 +131,13 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
   Manager and Sales Rep. Mapping: Admin = everything, Manager = approver, Sales Rep = drafter. A read-only
   viewer role needs permission-model work and is left as a follow-up.
 - Test helper `fake-admin.ts`: added `.neq()`.
+
+## 2026-11-18 — feat(meta-review-readiness): Instagram Login callbacks, privacy page, reviewer kit (MLA desk F8)
+- `/api/ig/deauthorize` (removing the app in Instagram revokes the account at once) and `/api/ig/data-deletion`
+  (deletes the account's stored items, replies, audit and scoped rules via cascades; answers Meta's
+  `{url, confirmation_code}`; the shared `/data-deletion-status` page shows it completed). Both verify the
+  `signed_request` with the Instagram app secret; public in middleware.
+- Privacy page: Instagram Login permissions, webhook fields, what is stored, automatic-reply limits, revoke and deletion.
+- `build-docs/meta-review-kit.md`: dashboard values, reviewer access, paste-ready use-case text and a screencast
+  script per permission for both submissions, pre-submission checklist.
+- `meta-scopes.test.ts` now also enforces the Instagram Login set against the privacy page.
