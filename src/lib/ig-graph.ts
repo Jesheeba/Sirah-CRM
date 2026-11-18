@@ -1,10 +1,9 @@
-import { GRAPH } from "@/lib/meta";
-import { igJson } from "@/lib/ig-login";
+import { graphUrl, igJson } from "@/lib/ig-login";
 import type { IgEvent } from "@/lib/ig-webhook";
 
-/** Read-side calls on graph.instagram.com for the social desk (never put the token in errors). */
+/** Read-side Graph calls for the social desk (Unified Login: graph.facebook.com; never put the token in errors). */
 
-const base = (path: string) => new URL(`https://graph.instagram.com/${GRAPH}/${path}`);
+const base = graphUrl;
 const str = (v: unknown) => (typeof v === "string" && v ? v : null);
 
 export interface IgEnrichment {

@@ -2,19 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { appBaseUrl } from "@/lib/meta";
-import {
-  IG_SCOPES,
-  exchangeIgCode,
-  fetchIgProfile,
-  getLongLivedIgToken,
-  isProfessionalAccount,
-  subscribeIgAccount,
-} from "@/lib/ig-login";
+import { IG_SCOPES, exchangeIgCode, fetchAssignedIgAccounts, subscribeIgAccount } from "@/lib/ig-login";
 
 /**
- * Instagram Login callback: verifies the CSRF state, exchanges the code, upgrades to a
- * long-lived token, checks the account is a professional account that no other tenant has
- * connected, stores it (service role) and subscribes it to comments/mentions/messages.
+ * Unified Login callback: verifies the CSRF state, exchanges the code for the client's system-user
+ * token, reads the Instagram accounts the client shared, and for each one that no other tenant has
+ * connected stores it (service role) and subscribes it to comments / mentions / messages.
  * Admin-only. Always redirects back to Settings → Integrations with a short reason code.
  */
 export async function GET(req: NextRequest) {
@@ -32,50 +25,52 @@ export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
   if (params.get("error")) return back("ig=error&reason=denied");
 
-  const code = params.get("code")?.replace(/#_$/, ""); // Instagram appends "#_" to the code
+  const code = params.get("code");
   const state = params.get("state");
   const saved = req.cookies.get("ig_oauth_state")?.value;
   if (!code || !state || !saved || state !== saved) return back("ig=error&reason=state");
 
   try {
-    const short = await exchangeIgCode(code);
-    const long = await getLongLivedIgToken(short.accessToken);
-    const profile = await fetchIgProfile(long.accessToken);
-    if (!profile.userId) return back("ig=error&reason=oauth");
-    if (!isProfessionalAccount(profile.accountType)) return back("ig=error&reason=personal");
+    const token = await exchangeIgCode(code);
+    const accounts = await fetchAssignedIgAccounts(token.accessToken);
+    if (!accounts.length) return back("ig=error&reason=noaccount");
 
     const admin = createAdminClient();
-    const { data: existing } = await admin
-      .from("ig_accounts")
-      .select("tenant_id")
-      .eq("ig_user_id", profile.userId)
-      .maybeSingle();
-    if (existing && existing.tenant_id !== ctx.tenantId) return back("ig=error&reason=taken");
-
-    let subscribed = false;
-    try {
-      subscribed = await subscribeIgAccount(long.accessToken);
-    } catch {
-      subscribed = false; // stored anyway; the settings card shows it and the admin can reconnect
+    let connected = 0;
+    let taken = 0;
+    let allSubscribed = true;
+    for (const a of accounts) {
+      const { data: existing } = await admin.from("ig_accounts").select("tenant_id").eq("ig_user_id", a.userId).maybeSingle();
+      if (existing && existing.tenant_id !== ctx.tenantId) {
+        taken++;
+        continue;
+      }
+      let subscribed = false;
+      try {
+        subscribed = await subscribeIgAccount(a.userId, token.accessToken);
+      } catch {
+        subscribed = false; // stored anyway; the card says so and the admin can reconnect
+      }
+      if (!subscribed) allSubscribed = false;
+      const { error } = await admin.from("ig_accounts").upsert(
+        {
+          tenant_id: ctx.tenantId,
+          ig_user_id: a.userId,
+          username: a.username,
+          account_type: "BUSINESS",
+          access_token: token.accessToken,
+          token_expires_at: token.expiresAt,
+          scopes: IG_SCOPES,
+          status: "active",
+          webhook_subscribed: subscribed,
+          connected_by: ctx.userId,
+        },
+        { onConflict: "ig_user_id" },
+      );
+      if (!error) connected++;
     }
-
-    const { error } = await admin.from("ig_accounts").upsert(
-      {
-        tenant_id: ctx.tenantId,
-        ig_user_id: profile.userId,
-        username: profile.username,
-        account_type: profile.accountType,
-        access_token: long.accessToken,
-        token_expires_at: long.expiresAt,
-        scopes: IG_SCOPES,
-        status: "active",
-        webhook_subscribed: subscribed,
-        connected_by: ctx.userId,
-      },
-      { onConflict: "ig_user_id" },
-    );
-    if (error) return back("ig=error&reason=save");
-    return back(`ig=connected&subscribed=${subscribed ? 1 : 0}`);
+    if (!connected) return back(`ig=error&reason=${taken ? "taken" : "save"}`);
+    return back(`ig=connected&subscribed=${allSubscribed ? 1 : 0}&accounts=${connected}`);
   } catch {
     return back("ig=error&reason=oauth");
   }

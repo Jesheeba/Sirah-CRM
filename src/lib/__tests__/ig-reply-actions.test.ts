@@ -98,7 +98,7 @@ describe("F4 direct mode", () => {
   it("an admin/manager reply posts immediately", async () => {
     as("admin");
     expect(await submitReply({ interactionId: "d1", channel: "dm", body: "We'll call you" })).toEqual({ ok: true, status: "sent" });
-    expect(h.send.sendDm).toHaveBeenCalledWith("u9", "We'll call you", "tok");
+    expect(h.send.sendDm).toHaveBeenCalledWith("ig-1", "u9", "We'll call you", "tok");
   });
   it("a rep's reply still waits for approval", async () => {
     as("rep");
@@ -117,7 +117,7 @@ describe("F4 Instagram rules enforced on the server", () => {
     h.state.tables.ig_desk_settings.push({ tenant_id: "T", reply_mode: "direct", allow_self_approve: false });
     as("admin");
     expect((await submitReply({ interactionId: "c1", channel: "private", body: "DMing you" })).status).toBe("sent");
-    expect(h.send.sendPrivateReply).toHaveBeenCalledWith("cmt-1", "DMing you", "tok");
+    expect(h.send.sendPrivateReply).toHaveBeenCalledWith("ig-1", "cmt-1", "DMing you", "tok");
     expect((await submitReply({ interactionId: "c1", channel: "private", body: "again" })).ok).toBe(false);
   });
   it("tagged posts can't be answered; a DM item can't get a public reply", async () => {

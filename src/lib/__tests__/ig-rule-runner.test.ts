@@ -91,7 +91,7 @@ describe("F9 runner", () => {
     const dm = item({ id: "d", kind: "dm", provider_id: "mid", text: "hello" });
     addItem(dm);
     await run([dm, item({ id: "tg", kind: "tag", text: "hello" })]);
-    expect(send.sendDm).toHaveBeenCalledWith("u9", "Hi!", "tok");
+    expect(send.sendDm).toHaveBeenCalledWith("ig-1", "u9", "Hi!", "tok");
     t.ig_rules = [];
     expect(await run([item({ id: "z" })])).toEqual({ matched: 0, sent: 0, queued: 0, blocked: 0 });
   });

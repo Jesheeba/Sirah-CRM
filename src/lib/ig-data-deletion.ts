@@ -10,14 +10,18 @@ const b64url = (s: string) => Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"
 
 export function verifyIgSignedRequest(
   signedRequest: string,
-  secret = process.env.IG_APP_SECRET ?? "",
+  secret: string | string[] = [process.env.META_APP_SECRET ?? "", process.env.IG_APP_SECRET ?? ""],
 ): { user_id: string; issued_at?: number } | null {
-  if (!secret || typeof signedRequest !== "string") return null;
+  const secrets = (Array.isArray(secret) ? secret : [secret]).filter(Boolean);
+  if (!secrets.length || typeof signedRequest !== "string") return null;
   const [sig, payload] = signedRequest.split(".", 2);
   if (!sig || !payload) return null;
-  const expected = crypto.createHmac("sha256", secret).update(payload).digest();
   const given = b64url(sig);
-  if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) return null;
+  const ok = secrets.some((s) => {
+    const expected = crypto.createHmac("sha256", s).update(payload).digest();
+    return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+  });
+  if (!ok) return null;
   try {
     const data = JSON.parse(b64url(payload).toString("utf8")) as { algorithm?: string; user_id?: unknown; issued_at?: number };
     if (String(data.algorithm).toUpperCase() !== "HMAC-SHA256") return null;

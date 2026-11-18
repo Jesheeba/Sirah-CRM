@@ -1,6 +1,6 @@
 # PLAN — MLA Social Desk (Instagram Login)
 
-Status: **DRAFT v2, awaiting approval.** No code written.
+Status: Phase A built (2026-11-18). **Switched to Instagram API with Unified Login** — see MEMORY.md and CHANGELOG.md.
 
 ## Goal and scope
 - Let an **MLA tenant** (Instagram-only account, no Facebook Page) connect Instagram and work its

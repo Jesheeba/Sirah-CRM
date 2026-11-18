@@ -23,13 +23,13 @@ export async function disconnectIgAccount(igUserId: string): Promise<IgLoginActi
   const admin = createAdminClient();
   const { data: acc } = await admin
     .from("ig_accounts")
-    .select("id, access_token")
+    .select("id, access_token, ig_user_id")
     .eq("tenant_id", ctx.tenantId) // MANDATORY: service role bypasses RLS.
     .eq("ig_user_id", igUserId)
     .maybeSingle();
   if (!acc) return { ok: false, error: "Account not found." };
 
-  if (acc.access_token) await unsubscribeIgAccount(acc.access_token as string).catch(() => {});
+  if (acc.access_token) await unsubscribeIgAccount(acc.ig_user_id as string, acc.access_token as string).catch(() => {});
   const { error } = await admin
     .from("ig_accounts")
     .update({ status: "revoked", access_token: "", webhook_subscribed: false })

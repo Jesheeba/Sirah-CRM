@@ -1,69 +1,43 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  IG_SCOPES,
-  buildIgAuthUrl,
-  expiresAtFrom,
-  isProfessionalAccount,
-  needsRefresh,
-  parseShortToken,
-} from "./ig-login";
+import { IG_SCOPES, buildIgAuthUrl, expiresAtFrom, needsRefresh, tokenExpiry } from "./ig-login";
 import { processIgTokenRefresh } from "./ig-token-refresh";
 import { FakeAdmin } from "./__tests__/fake-admin";
 
 const DAY = 86_400_000;
 const NOW = new Date("2026-11-18T00:00:00Z");
 
-describe("F1 connect: account type and scopes", () => {
-  it("accepts Business and Creator accounts, refuses personal / unknown", () => {
-    expect(isProfessionalAccount("BUSINESS")).toBe(true);
-    expect(isProfessionalAccount("media_creator")).toBe(true);
-    expect(isProfessionalAccount("PERSONAL")).toBe(false);
-    expect(isProfessionalAccount(null)).toBe(false);
-    expect(isProfessionalAccount("")).toBe(false);
+describe("F1 connect (Unified Login): scopes and login URL", () => {
+  it("uses the three instagram_* permissions (one set for Page-linked and Instagram-only clients)", () => {
+    expect(IG_SCOPES.split(",").sort()).toEqual(["instagram_basic", "instagram_manage_comments", "instagram_manage_messages"]);
   });
-  it("requests exactly the three instagram_business_* permissions", () => {
-    expect(IG_SCOPES.split(",").sort()).toEqual([
-      "instagram_business_basic",
-      "instagram_business_manage_comments",
-      "instagram_business_manage_messages",
-    ]);
-  });
-  it("auth URL carries the client id, redirect, scope and state", () => {
-    process.env.IG_APP_ID = "123";
+  it("login URL is Facebook Login for Business with the Meta app id, config_id, redirect and state", () => {
+    process.env.META_APP_ID = "1671800907458020";
+    process.env.IG_CONFIG_ID = "cfg-1";
     process.env.NEXT_PUBLIC_APP_URL = "https://crm.example.com";
     const u = new URL(buildIgAuthUrl("state-1"));
-    expect(u.origin + u.pathname).toBe("https://www.instagram.com/oauth/authorize");
-    expect(u.searchParams.get("client_id")).toBe("123");
-    expect(u.searchParams.get("state")).toBe("state-1");
-    expect(u.searchParams.get("response_type")).toBe("code");
-    expect(u.searchParams.get("redirect_uri")).toBe("https://crm.example.com/api/ig/oauth/callback");
-    expect(u.searchParams.get("scope")).toBe(IG_SCOPES);
+    expect(u.origin + u.pathname).toBe("https://www.facebook.com/dialog/oauth");
+    expect(Object.fromEntries(u.searchParams)).toEqual({
+      client_id: "1671800907458020",
+      config_id: "cfg-1",
+      redirect_uri: "https://crm.example.com/api/ig/oauth/callback",
+      response_type: "code",
+      state: "state-1",
+    });
   });
 });
 
-describe("F1 connect: code-exchange response shapes", () => {
-  it("reads both the flat and the {data:[…]} shapes", () => {
-    expect(parseShortToken({ access_token: "t1", user_id: 99 })).toEqual({ accessToken: "t1", userId: "99" });
-    expect(parseShortToken({ data: [{ access_token: "t2", user_id: "7" }] })).toEqual({ accessToken: "t2", userId: "7" });
+describe("F1 token lifetime", () => {
+  it("expires_in missing or 0 means a never-expiring system-user token", () => {
+    expect(tokenExpiry({}, NOW)).toBeNull();
+    expect(tokenExpiry({ expires_in: 0 }, NOW)).toBeNull();
+    expect(tokenExpiry({ expires_in: 3600 }, NOW)).toBe(new Date(NOW.getTime() + 3600_000).toISOString());
   });
-  it("returns null for anything without a token", () => {
-    expect(parseShortToken({})).toBeNull();
-    expect(parseShortToken(null)).toBeNull();
-    expect(parseShortToken({ data: [] })).toBeNull();
-    expect(parseShortToken({ access_token: "" })).toBeNull();
-  });
-});
-
-describe("F1 token lifecycle: refresh window (mocked clock)", () => {
-  it("is false when more than 10 days remain, true inside the window", () => {
+  it("refresh window: never-expiring tokens are never refreshed; others inside 10 days are", () => {
+    expect(needsRefresh(null, NOW)).toBe(false);
     expect(needsRefresh(new Date(NOW.getTime() + 30 * DAY).toISOString(), NOW)).toBe(false);
-    expect(needsRefresh(new Date(NOW.getTime() + 11 * DAY).toISOString(), NOW)).toBe(false);
     expect(needsRefresh(new Date(NOW.getTime() + 9 * DAY).toISOString(), NOW)).toBe(true);
-  });
-  it("treats missing, invalid and past expiry as needing attention", () => {
-    expect(needsRefresh(null, NOW)).toBe(true);
     expect(needsRefresh("not-a-date", NOW)).toBe(true);
     expect(needsRefresh(new Date(NOW.getTime() - DAY).toISOString(), NOW)).toBe(true);
   });
@@ -106,6 +80,11 @@ describe("F1 token lifecycle: daily refresh job", () => {
     expect(res).toEqual({ checked: 1, refreshed: 0, expired: 0, failed: 1 });
     expect(rows[0].status).toBe("active");
     expect(rows[0].access_token).toBe("tok-a");
+  });
+  it("never-expiring tokens are skipped", async () => {
+    const refresh = vi.fn();
+    expect((await run([acc("a", null)], refresh)).res.checked).toBe(0);
+    expect(refresh).not.toHaveBeenCalled();
   });
   it("ignores revoked accounts and tolerates an empty table", async () => {
     const refresh = vi.fn();

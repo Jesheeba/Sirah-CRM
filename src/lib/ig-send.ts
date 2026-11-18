@@ -1,10 +1,9 @@
-import { GRAPH } from "@/lib/meta";
-import { igJson } from "@/lib/ig-login";
+import { graphUrl, igJson } from "@/lib/ig-login";
 
-/** Write calls on graph.instagram.com for the social desk (F4). Each returns Instagram's id for what was posted. */
+/** Write Graph calls for the social desk (F4; Unified Login: graph.facebook.com). Each returns Instagram's id for what was posted. */
 
 const url = (path: string, token: string) => {
-  const u = new URL(`https://graph.instagram.com/${GRAPH}/${path}`);
+  const u = graphUrl(path);
   u.searchParams.set("access_token", token);
   return u;
 };
@@ -26,9 +25,9 @@ export async function postMentionReply(igUserId: string, commentId: string, medi
   return idOf(await igJson(u, { method: "POST" }));
 }
 
-async function sendMessage(recipient: Record<string, string>, text: string, token: string): Promise<string> {
+async function sendMessage(igUserId: string, recipient: Record<string, string>, text: string, token: string): Promise<string> {
   return idOf(
-    await igJson(url("me/messages", token), {
+    await igJson(url(`${igUserId}/messages`, token), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ recipient, message: { text } }),
@@ -37,8 +36,9 @@ async function sendMessage(recipient: Record<string, string>, text: string, toke
 }
 
 /** Direct message to someone who messaged the account (24-hour window). */
-export const sendDm = (recipientId: string, text: string, token: string) => sendMessage({ id: recipientId }, text, token);
+export const sendDm = (igUserId: string, recipientId: string, text: string, token: string) =>
+  sendMessage(igUserId, { id: recipientId }, text, token);
 
 /** Private reply: a DM to the author of a comment (once per comment, within 7 days). */
-export const sendPrivateReply = (commentId: string, text: string, token: string) =>
-  sendMessage({ comment_id: commentId }, text, token);
+export const sendPrivateReply = (igUserId: string, commentId: string, text: string, token: string) =>
+  sendMessage(igUserId, { comment_id: commentId }, text, token);

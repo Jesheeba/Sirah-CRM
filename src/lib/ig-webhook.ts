@@ -95,7 +95,7 @@ export function parseIgWebhook(body: unknown): IgEvent[] {
         const ev = parseMessage(igUserId, value, entry.time);
         if (ev) out.push(ev);
       } else if (change.field === "comments") {
-        const id = s(value.id);
+        const id = s(value.id) ?? s(value.comment_id); // Unified Login sends comment_id
         if (!id) continue;
         const from = obj(value.from);
         out.push({
@@ -136,11 +136,18 @@ export function parseIgWebhook(body: unknown): IgEvent[] {
   return out;
 }
 
-/** `X-Hub-Signature-256` over the raw body, keyed with the Instagram app secret. */
-export function verifyIgSignature(rawBody: string, header: string | null, secret = process.env.IG_APP_SECRET ?? ""): boolean {
-  if (!secret || !header || !header.startsWith("sha256=")) return false;
-  const expected = "sha256=" + crypto.createHmac("sha256", secret).update(rawBody, "utf8").digest("hex");
+/** `X-Hub-Signature-256` over the raw body, keyed with the app secret. */
+export function verifyIgSignature(
+  rawBody: string,
+  header: string | null,
+  // Unified Login signs with the Meta app secret; the Instagram app secret is kept as a fallback
+  // for deliveries from the earlier Instagram Login webhook.
+  secrets: string[] = [process.env.META_APP_SECRET ?? "", process.env.IG_APP_SECRET ?? ""],
+): boolean {
+  if (!header || !header.startsWith("sha256=")) return false;
   const a = Buffer.from(header);
-  const b = Buffer.from(expected);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  return secrets.filter(Boolean).some((secret) => {
+    const b = Buffer.from("sha256=" + crypto.createHmac("sha256", secret).update(rawBody, "utf8").digest("hex"));
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  });
 }

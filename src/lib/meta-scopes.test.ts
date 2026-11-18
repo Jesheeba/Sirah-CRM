@@ -17,8 +17,9 @@ describe("F10 scopes match the App Review submission", () => {
   it("requests only approved or submitted permissions", () => {
     for (const s of requested) expect([...APPROVED, ...IN_SUBMISSION]).toContain(s);
   });
-  it("the Instagram Login connect requests exactly the MLA submission set, and the privacy page explains it", () => {
-    expect(IG_SCOPES.split(",").sort()).toEqual(["instagram_business_basic", "instagram_business_manage_comments", "instagram_business_manage_messages"]);
+  it("the Instagram (Unified Login) connect uses the same three instagram_* permissions, and the privacy page explains them", () => {
+    expect(IG_SCOPES.split(",").sort()).toEqual(["instagram_basic", "instagram_manage_comments", "instagram_manage_messages"]);
+    for (const s of IG_SCOPES.split(",")) expect(IN_SUBMISSION).toContain(s);
     const privacy = readFileSync("src/app/privacy/page.tsx", "utf8");
     for (const s of IG_SCOPES.split(",")) expect(privacy).toContain(s);
     for (const f of ["comments", "mentions", "messages"]) expect(privacy).toContain(`>${f}</code>`);

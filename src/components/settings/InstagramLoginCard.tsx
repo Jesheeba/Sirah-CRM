@@ -16,10 +16,10 @@ export interface IgAccountInfo {
 }
 
 const REASONS: Record<string, string> = {
-  unconfigured: "Instagram Login is not set up on the server yet (IG_APP_ID / IG_APP_SECRET).",
+  unconfigured: "Instagram connection is not set up on the server yet (META_APP_ID / META_APP_SECRET / IG_CONFIG_ID).",
   denied: "You cancelled or denied the Instagram permission.",
   state: "Security check failed. Please try connecting again.",
-  personal: "That is a personal Instagram account. Switch it to a Business or Creator (professional) account and try again.",
+  noaccount: "No Instagram account was shared. Connect again and select your Instagram Business or Creator account.",
   taken: "That Instagram account is already connected to another organization.",
   save: "Couldn't save the account. Please try again.",
   oauth: "Instagram sign-in failed. Please try again.",
@@ -67,7 +67,7 @@ export default function InstagramLoginCard({
             Instagram (comments, mentions &amp; messages)
           </h2>
           <p className="text-sm text-slate-500">
-            Sign in with Instagram — no Facebook Page needed. Works with Business and Creator accounts.
+            Sign in with Instagram or Facebook — no Facebook Page needed. Works with Business and Creator accounts, and gets comments, @mentions and messages.
           </p>
         </div>
         {configured ? (

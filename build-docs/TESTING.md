@@ -167,3 +167,9 @@ F4 live: 28/28 on the deployed site (see CHANGELOG).
 | Deletion removes the account's data and confirms via the status page | data-deletion › deletes the account's data…; schema cascades | pass |
 | Privacy lists every requested permission + webhook fields | meta-scopes › Instagram Login connect… / privacy page explains every… | pass |
 | Reviewer kit and checklist exist | build-docs/meta-review-kit.md | done |
+
+## ig-unified-login (switch) — 2026-11-18
+Updated `ig-login.test.ts`, `__tests__/ig-oauth-callback.test.ts` (multi-account, no-account, taken-but-others-connect,
+never-expiring token), `ig-webhook.test.ts` (either secret; `comment_id`), send-call expectations, `meta-scopes.test.ts`.
+Full suite 343 pass; `tsc` clean. Not verifiable offline: the live login/consent screens, token type, reply/DM endpoints
+and webhook signing secret on Unified Login — to confirm in the first real connect with a test account.

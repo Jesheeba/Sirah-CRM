@@ -1,68 +1,63 @@
 /**
- * "Instagram API with Instagram Login" helpers — the connect flow for an Instagram
- * professional account that has no Facebook Page (MLA social desk, feature F1).
+ * Connect an Instagram professional account through Meta's "Instagram API with Unified Login"
+ * (MLA social desk, F1 — switched from the legacy Instagram Login on 2026-11-18 so @mentions
+ * are available and one permission set serves Page-linked and Instagram-only clients).
  *
- * Separate from lib/meta.ts on purpose: different app credentials (the Instagram app id /
- * secret from the app's Instagram product), different hosts (instagram.com /
- * graph.instagram.com) and different permission names (`instagram_business_*`).
+ * Facts from Meta's docs (instagram-api-with-unified-login/get-started + authentication):
+ *  - login: www.facebook.com/dialog/oauth with the Meta app id and a Facebook Login for Business
+ *    `config_id`; the client logs in with Instagram or Facebook; no Facebook Page needed;
+ *  - the code is exchanged on graph.facebook.com with the Meta app id/secret and returns a
+ *    Business Integration System User token whose lifetime is set in the configuration
+ *    ("Never" by default) — so no 60-day refresh;
+ *  - accounts come from /me/assigned_instagram_accounts; all calls use graph.facebook.com.
  *
- * Pure helpers (URL building, token parsing, expiry maths) are exported for unit tests;
- * network calls never put a token in an error message.
+ * Pure helpers are exported for unit tests; network calls never put a token in an error message.
  */
-import { GRAPH, appBaseUrl } from "@/lib/meta";
+import { appBaseUrl } from "@/lib/meta";
 
-export const IG_SCOPES =
-  "instagram_business_basic,instagram_business_manage_comments,instagram_business_manage_messages";
+/** Graph version used in Meta's Unified Login examples. */
+export const IG_GRAPH = "v27.0";
+export const IG_SCOPES = "instagram_basic,instagram_manage_comments,instagram_manage_messages";
 export const IG_WEBHOOK_FIELDS = "comments,mentions,messages";
-/** Refresh a long-lived token this long before it expires (it lasts ~60 days). */
+/** Refresh a token this long before it expires — only for configurations with an expiry. */
 export const IG_REFRESH_WINDOW_DAYS = 10;
-/** Only professional accounts can use the Instagram Login API. */
-const PROFESSIONAL = new Set(["BUSINESS", "MEDIA_CREATOR"]);
 
-const igAppId = () => process.env.IG_APP_ID ?? "";
-const igAppSecret = () => process.env.IG_APP_SECRET ?? "";
+const metaAppId = () => process.env.META_APP_ID ?? "";
+const metaAppSecret = () => process.env.META_APP_SECRET ?? "";
+/** Facebook Login for Business configuration created under "API setup with Unified login". */
+const igConfigId = () => process.env.IG_CONFIG_ID ?? "";
 
 export function igConfigured(): boolean {
-  return Boolean(igAppId() && igAppSecret());
+  return Boolean(metaAppId() && metaAppSecret() && igConfigId());
 }
 
 export function igRedirectUri(): string {
   return `${appBaseUrl()}/api/ig/oauth/callback`;
 }
 
+export const graphUrl = (path: string) => new URL(`https://graph.facebook.com/${IG_GRAPH}/${path}`);
+
 export function buildIgAuthUrl(state: string): string {
-  const url = new URL("https://www.instagram.com/oauth/authorize");
-  url.searchParams.set("client_id", igAppId());
+  const url = new URL("https://www.facebook.com/dialog/oauth");
+  url.searchParams.set("client_id", metaAppId());
+  url.searchParams.set("config_id", igConfigId());
   url.searchParams.set("redirect_uri", igRedirectUri());
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", IG_SCOPES);
   url.searchParams.set("state", state);
   return url.toString();
-}
-
-export function isProfessionalAccount(accountType: string | null | undefined): boolean {
-  return PROFESSIONAL.has((accountType ?? "").toUpperCase());
-}
-
-/** The code exchange answers either `{access_token,user_id}` or `{data:[{access_token,user_id}]}`. */
-export function parseShortToken(json: unknown): { accessToken: string; userId: string } | null {
-  const j = json as { access_token?: unknown; user_id?: unknown; data?: unknown[] } | null;
-  const row = (Array.isArray(j?.data) ? j!.data[0] : j) as { access_token?: unknown; user_id?: unknown } | undefined;
-  if (!row || typeof row.access_token !== "string" || !row.access_token) return null;
-  return { accessToken: row.access_token, userId: row.user_id != null ? String(row.user_id) : "" };
 }
 
 export function expiresAtFrom(expiresInSeconds: number, now: Date = new Date()): string {
   return new Date(now.getTime() + expiresInSeconds * 1000).toISOString();
 }
 
-/** True when the token is within the refresh window (or already past expiry / unknown). */
+/** True when the token is within the refresh window or already past expiry. Null = never expires. */
 export function needsRefresh(
   expiresAt: string | null,
   now: Date = new Date(),
   windowDays = IG_REFRESH_WINDOW_DAYS,
 ): boolean {
-  if (!expiresAt) return true;
+  if (!expiresAt) return false;
   const t = Date.parse(expiresAt);
   if (Number.isNaN(t)) return true;
   return t - now.getTime() <= windowDays * 86_400_000;
@@ -73,74 +68,67 @@ export async function igJson(url: URL | string, init?: RequestInit): Promise<Rec
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   const err = json.error as { message?: string } | undefined;
   const msg = (json.error_message as string | undefined) ?? err?.message;
-  if (!res.ok || err || json.error_type) throw new Error(msg ?? `Instagram API error (HTTP ${res.status})`);
+  if (!res.ok || err || json.error_type) throw new Error(msg ?? `Meta API error (HTTP ${res.status})`);
   return json;
 }
 
-/** Exchange the OAuth `code` for a short-lived Instagram user token. */
-export async function exchangeIgCode(code: string): Promise<{ accessToken: string; userId: string }> {
-  const body = new URLSearchParams({
-    client_id: igAppId(),
-    client_secret: igAppSecret(),
-    grant_type: "authorization_code",
-    redirect_uri: igRedirectUri(),
-    code,
-  });
-  const json = await igJson("https://api.instagram.com/oauth/access_token", { method: "POST", body });
-  const parsed = parseShortToken(json);
-  if (!parsed) throw new Error("Instagram did not return an access token.");
-  return parsed;
+/** `expires_in` of 0 / missing means the token does not expire (system-user token set to "Never"). */
+export function tokenExpiry(json: Record<string, unknown>, now: Date = new Date()): string | null {
+  const s = Number(json.expires_in);
+  return Number.isFinite(s) && s > 0 ? expiresAtFrom(s, now) : null;
 }
 
-/** Short-lived → long-lived (≈60 days). */
-export async function getLongLivedIgToken(shortToken: string): Promise<{ accessToken: string; expiresAt: string }> {
-  const url = new URL("https://graph.instagram.com/access_token");
-  url.searchParams.set("grant_type", "ig_exchange_token");
-  url.searchParams.set("client_secret", igAppSecret());
-  url.searchParams.set("access_token", shortToken);
+/** Exchange the OAuth `code` for the client's Business Integration System User token. */
+export async function exchangeIgCode(code: string): Promise<{ accessToken: string; expiresAt: string | null }> {
+  const url = graphUrl("oauth/access_token");
+  url.searchParams.set("client_id", metaAppId());
+  url.searchParams.set("client_secret", metaAppSecret());
+  url.searchParams.set("redirect_uri", igRedirectUri());
+  url.searchParams.set("code", code);
   const json = await igJson(url);
-  if (typeof json.access_token !== "string") throw new Error("Instagram did not return a long-lived token.");
-  return { accessToken: json.access_token, expiresAt: expiresAtFrom(Number(json.expires_in) || 60 * 86_400) };
+  if (typeof json.access_token !== "string" || !json.access_token) throw new Error("Meta did not return an access token.");
+  return { accessToken: json.access_token, expiresAt: tokenExpiry(json) };
 }
 
-/** Extend a still-valid long-lived token (must be ≥24 h old). */
+/** Refresh is only possible through Meta's token management API; until a configuration with an
+ *  expiry is used this is never called (tokens default to "Never"). */
 export async function refreshIgToken(token: string): Promise<{ accessToken: string; expiresAt: string }> {
-  const url = new URL("https://graph.instagram.com/refresh_access_token");
-  url.searchParams.set("grant_type", "ig_refresh_token");
-  url.searchParams.set("access_token", token);
-  const json = await igJson(url);
-  if (typeof json.access_token !== "string") throw new Error("Instagram did not return a refreshed token.");
-  return { accessToken: json.access_token, expiresAt: expiresAtFrom(Number(json.expires_in) || 60 * 86_400) };
+  void token;
+  throw new Error("This connection's token can't be renewed automatically — reconnect Instagram.");
 }
 
-export interface IgProfile {
+export interface IgAccount {
   userId: string;
   username: string | null;
-  accountType: string | null;
 }
 
-export async function fetchIgProfile(token: string): Promise<IgProfile> {
-  const url = new URL(`https://graph.instagram.com/${GRAPH}/me`);
-  url.searchParams.set("fields", "user_id,username,account_type");
+/** Instagram professional accounts the client shared during login (one login can share several). */
+export async function fetchAssignedIgAccounts(token: string): Promise<IgAccount[]> {
+  const out: IgAccount[] = [];
+  let url: URL | null = graphUrl("me/assigned_instagram_accounts");
+  url.searchParams.set("fields", "id,username");
   url.searchParams.set("access_token", token);
-  const j = await igJson(url);
-  return {
-    userId: String(j.user_id ?? j.id ?? ""),
-    username: typeof j.username === "string" ? j.username : null,
-    accountType: typeof j.account_type === "string" ? j.account_type : null,
-  };
+  for (let page = 0; url && page < 10; page++) {
+    const j = await igJson(url);
+    for (const a of (j.data ?? []) as { id?: unknown; username?: unknown }[]) {
+      if (a.id) out.push({ userId: String(a.id), username: typeof a.username === "string" ? a.username : null });
+    }
+    const next = (j.paging as { next?: string } | undefined)?.next;
+    url = next ? new URL(next) : null;
+  }
+  return out;
 }
 
-export async function subscribeIgAccount(token: string): Promise<boolean> {
-  const url = new URL(`https://graph.instagram.com/${GRAPH}/me/subscribed_apps`);
+export async function subscribeIgAccount(igUserId: string, token: string): Promise<boolean> {
+  const url = graphUrl(`${igUserId}/subscribed_apps`);
   url.searchParams.set("subscribed_fields", IG_WEBHOOK_FIELDS);
   url.searchParams.set("access_token", token);
   const json = await igJson(url, { method: "POST" });
   return json.success === true;
 }
 
-export async function unsubscribeIgAccount(token: string): Promise<void> {
-  const url = new URL(`https://graph.instagram.com/${GRAPH}/me/subscribed_apps`);
+export async function unsubscribeIgAccount(igUserId: string, token: string): Promise<void> {
+  const url = graphUrl(`${igUserId}/subscribed_apps`);
   url.searchParams.set("access_token", token);
   await igJson(url, { method: "DELETE" });
 }

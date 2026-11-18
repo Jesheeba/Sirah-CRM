@@ -97,13 +97,13 @@ export default function PrivacyPolicy() {
           </ul>
           <p className="mt-3 text-slate-600 leading-relaxed">
             <strong>Instagram accounts without a Facebook Page.</strong> When you use &quot;Connect Instagram&quot; under
-            Settings → Integrations (sign in with Instagram), you authorise Sirah CRM to access that Instagram professional
-            account using the following permissions:
+            Settings → Integrations (sign in with Instagram or Facebook — no Facebook Page needed), you authorise Sirah CRM
+            to access the Instagram professional account(s) you choose, using the same three Instagram permissions:
           </p>
           <ul className="mt-2 list-disc pl-5 space-y-1 text-slate-600">
-            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_business_basic</code> — show the account&apos;s name and username, read its posts and the posts that tag it</li>
-            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_business_manage_comments</code> — receive comments and @mentions and post the replies your team writes or approves</li>
-            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_business_manage_messages</code> — receive direct messages and send the replies your team writes or approves (within Instagram&apos;s 24-hour window)</li>
+            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_basic</code> — show the account&apos;s name and username, read its posts and the posts that tag it</li>
+            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_manage_comments</code> — receive comments and @mentions (including on other people&apos;s posts) and post the replies your team writes or approves</li>
+            <li><code className="text-sm bg-slate-100 px-1 rounded">instagram_manage_messages</code> — receive direct messages and send the replies your team writes or approves (within Instagram&apos;s 24-hour window)</li>
           </ul>
           <p className="mt-3 text-slate-600 leading-relaxed">
             We subscribe to the <code className="text-sm bg-slate-100 px-1 rounded">comments</code>,{" "}

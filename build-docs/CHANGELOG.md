@@ -141,3 +141,14 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
 - `build-docs/meta-review-kit.md`: dashboard values, reviewer access, paste-ready use-case text and a screencast
   script per permission for both submissions, pre-submission checklist.
 - `meta-scopes.test.ts` now also enforces the Instagram Login set against the privacy page.
+
+## 2026-11-18 — refactor(ig-unified-login): move the MLA desk to Instagram API with Unified Login
+- Why: the legacy Instagram Login offers no `mentions` webhook; Unified Login does, needs no Page, is Meta's
+  recommended path, and shares the `instagram_*` permissions with Page-linked clients (one review).
+- Connect: `www.facebook.com/dialog/oauth` with the Meta app id + `IG_CONFIG_ID`; code → Business Integration System
+  User token on graph.facebook.com (lifetime from the configuration; "Never" ⇒ stored with no expiry, never refreshed);
+  every shared account from `/me/assigned_instagram_accounts` is connected and subscribed
+  (`POST /{ig-id}/subscribed_apps`, fields comments, mentions, messages).
+- Graph calls (reads, replies, DMs via `/{ig-id}/messages`) moved to graph.facebook.com v27.0. Webhook signature
+  accepted with the Meta app secret (Instagram app secret kept as fallback); comment ids read from `comment_id`.
+- Privacy page and reviewer kit updated: one submission. Inbox, replies, rules, issues, setup, database unchanged.

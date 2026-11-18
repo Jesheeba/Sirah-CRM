@@ -110,8 +110,8 @@ export async function deliver(admin: Admin, reply: Reply, it: Interaction, acc: 
 
   try {
     let providerId: string;
-    if (reply.channel === "dm") providerId = await sendDm(it.author_id ?? "", reply.body, acc.access_token);
-    else if (reply.channel === "private") providerId = await sendPrivateReply(it.provider_id, reply.body, acc.access_token);
+    if (reply.channel === "dm") providerId = await sendDm(acc.ig_user_id, it.author_id ?? "", reply.body, acc.access_token);
+    else if (reply.channel === "private") providerId = await sendPrivateReply(acc.ig_user_id, it.provider_id, reply.body, acc.access_token);
     else if (it.kind === "mention") providerId = await postMentionReply(acc.ig_user_id, it.provider_id, it.media_id ?? "", reply.body, acc.access_token);
     else providerId = await postCommentReply(it.provider_id, reply.body, acc.access_token);
 

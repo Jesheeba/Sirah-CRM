@@ -18,6 +18,10 @@ describe("F2 parse: comments", () => {
       text: "Where is the office?", mediaId: "m1", parentId: "c0", occurredAt: "2025-11-18T00:00:00.000Z",
     });
   });
+  it("reads the Unified Login shape, where the id arrives as comment_id", () => {
+    const [e] = parseIgWebhook(body({ id: "ig-1", changes: [{ field: "comments", value: { comment_id: "c9", text: "hi", from: { id: "u1", username: "a" }, media: { id: "m" } } }] }));
+    expect(e).toMatchObject({ kind: "comment", providerId: "c9", authorHandle: "a" });
+  });
   it("skips a comment with no id", () => {
     expect(parseIgWebhook(body({ id: "ig-1", changes: [{ field: "comments", value: { text: "x" } }] }))).toEqual([]);
   });
@@ -97,13 +101,17 @@ describe("F2 signature", () => {
   const secret = "ig-secret";
   const raw = '{"entry":[]}';
   const sig = "sha256=" + crypto.createHmac("sha256", secret).update(raw).digest("hex");
-  it("accepts the correct signature", () => expect(verifyIgSignature(raw, sig, secret)).toBe(true));
+  it("accepts the correct signature", () => expect(verifyIgSignature(raw, sig, [secret])).toBe(true));
+  it("accepts either configured secret (Meta app secret for Unified Login, Instagram app secret as fallback)", () => {
+    expect(verifyIgSignature(raw, sig, ["meta-secret", secret])).toBe(true);
+    expect(verifyIgSignature(raw, sig, [secret, ""])).toBe(true);
+  });
   it("rejects tampered body, wrong secret, missing/odd header and an unset secret", () => {
-    expect(verifyIgSignature(raw + " ", sig, secret)).toBe(false);
-    expect(verifyIgSignature(raw, sig, "other")).toBe(false);
-    expect(verifyIgSignature(raw, null, secret)).toBe(false);
-    expect(verifyIgSignature(raw, "sha256=short", secret)).toBe(false);
-    expect(verifyIgSignature(raw, sig.replace("sha256=", ""), secret)).toBe(false);
-    expect(verifyIgSignature(raw, sig, "")).toBe(false);
+    expect(verifyIgSignature(raw + " ", sig, [secret])).toBe(false);
+    expect(verifyIgSignature(raw, sig, ["other"])).toBe(false);
+    expect(verifyIgSignature(raw, null, [secret])).toBe(false);
+    expect(verifyIgSignature(raw, "sha256=short", [secret])).toBe(false);
+    expect(verifyIgSignature(raw, sig.replace("sha256=", ""), [secret])).toBe(false);
+    expect(verifyIgSignature(raw, sig, [""])).toBe(false);
   });
 });
