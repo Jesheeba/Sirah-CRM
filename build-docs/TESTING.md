@@ -83,3 +83,6 @@ site after the env vars and migration 0064 are in place: Connect → consent →
 
 Not covered: real Graph calls (mention lookup, `/tags`) and the live webhook handshake — needs IG_APP_SECRET, a
 connected test account and migration 0065. Verify on the live site: comment from a second account → row appears.
+
+## meta-scopes (F10 prep) — 2026-11-18
+`src/lib/meta-scopes.test.ts` (3): no `ads_management`; every requested scope is approved or submitted; privacy page lists each. Full suite 196 pass; `tsc` clean.

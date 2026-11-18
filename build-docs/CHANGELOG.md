@@ -73,3 +73,8 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
 - Needs `IG_APP_SECRET` (signature) and optionally `IG_VERIFY_TOKEN` (falls back to the Meta verify token);
   set the callback URL `https://<app>/api/ig/webhook` in the Meta app's Instagram product, fields
   `comments`, `mentions`, `messages`. Needs migration 0065 applied.
+
+## 2026-11-18 — fix(meta-scopes): stop requesting ads_management
+- Removed `ads_management` from `META_SCOPES_FACEBOOK`, the privacy page, the "ads not granted" banner and its
+  `fetchGrantedScopes` check (now unused). Ad names: `META_ADS_TOKEN` (System User) or the ad id.
+- New `meta-scopes.test.ts`: every requested scope is approved or in the submission and explained on the privacy page.

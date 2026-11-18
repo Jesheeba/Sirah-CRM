@@ -8,7 +8,6 @@ import {
   fetchMetaUserId,
   getLongLivedUserToken,
   listPages,
-  fetchGrantedScopes,
   subscribePageToLeadgen,
   subscribePageToMessages,
   subscribePageToComments,
@@ -123,13 +122,7 @@ export async function GET(req: NextRequest) {
         `meta=error&reason=${intent === "instagram" ? "noig" : "save"}${via}`,
       );
     }
-    // Meta drops a declined scope silently, so the connect "succeeds" without
-    // ads access and ad names then fail much later, far from the cause. Say so now.
-    const noAds =
-      intent === "facebook" && !(await fetchGrantedScopes(userToken)).includes("ads_management");
-    return redirectBack(
-      `meta=connected&pages=${connected}${via}${noAds ? "&ads=denied" : ""}`,
-    );
+    return redirectBack(`meta=connected&pages=${connected}${via}`);
   } catch {
     return redirectBack(`meta=error&reason=oauth${via}`);
   }

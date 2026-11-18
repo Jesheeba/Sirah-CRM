@@ -85,7 +85,6 @@ export default function PrivacyPolicy() {
             <li><code className="text-sm bg-slate-100 px-1 rounded">pages_read_engagement</code> — read basic Page info</li>
             <li><code className="text-sm bg-slate-100 px-1 rounded">pages_manage_ads</code> — list the lead forms on your Page so you can import your past leads</li>
             <li><code className="text-sm bg-slate-100 px-1 rounded">business_management</code> — list Business-managed Pages</li>
-            <li><code className="text-sm bg-slate-100 px-1 rounded">ads_management</code> — read the name of the ad a lead came from</li>
           </ul>
           <p className="mt-3 text-slate-600 leading-relaxed">
             When you use the &quot;Connect Instagram&quot; feature, you authorise Sirah CRM to access the

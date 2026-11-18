@@ -19,12 +19,10 @@ export const GRAPH = "v21.0";
  *  `pages_manage_ads` lets us enumerate a page's lead forms (used for verification /
  *  optional backfill); the webhook itself only needs `leads_retrieval`.
  *
- *  `ads_management` is what makes an AD NODE readable (`GET /{ad-id}?fields=name`), which is
- *  how a lead gets its ad name. `pages_manage_ads` is NOT enough — it covers ads on a Page,
- *  not the ad object. Meta accepts a Page token here, but only when the person connecting can
- *  advertise on both the Page and the ad account. Outside App Review this works only for app
- *  admins (Graph error 270), so a lead keeps showing its raw ad id until the scope is granted
- *  — never a failure, just a missing name.
+ *  `ads_management` is deliberately NOT requested (decision 2026-11-18): it grants full control
+ *  of a client's ads only to read an ad's name, and it is not in the App Review submission.
+ *  Ad names come from the optional System User token (META_ADS_TOKEN); without it a lead keeps
+ *  its ad id — never a failure, just a missing name.
  *
  *  Kept separate from META_SCOPES_INSTAGRAM: `instagram_manage_messages`/`pages_messaging`
  *  require the app to have those permissions added under Permissions and features in the
@@ -32,7 +30,7 @@ export const GRAPH = "v21.0";
  *  "Invalid Scopes" and blocks Connect Facebook too. Two OAuth entry points let an admin
  *  connect Lead Ads without Instagram DM ever being approved. */
 export const META_SCOPES_FACEBOOK =
-  "pages_show_list,pages_manage_metadata,leads_retrieval,pages_read_engagement,business_management,pages_manage_ads,ads_management";
+  "pages_show_list,pages_manage_metadata,leads_retrieval,pages_read_engagement,business_management,pages_manage_ads";
 
 /** Permissions requested during "Connect Instagram" — covers Instagram DM automation.
  *  `pages_show_list` is needed to re-list the user's Pages and find which one has a
@@ -136,19 +134,6 @@ export async function fetchMetaUserId(accessToken: string): Promise<string | nul
     return typeof json.id === "string" ? json.id : null;
   } catch {
     return null;
-  }
-}
-
-/** Permissions Meta actually granted this token. A declined scope is dropped
- *  silently rather than failing the OAuth, so this is the only way to tell.
- *  Best-effort: an empty list means "could not determine", not "none granted". */
-export async function fetchGrantedScopes(userToken: string): Promise<string[]> {
-  try {
-    const json = await graphFetch("me/permissions", { access_token: userToken });
-    const data = (json.data ?? []) as Array<{ permission?: string; status?: string }>;
-    return data.filter((p) => p.status === "granted" && p.permission).map((p) => p.permission!);
-  } catch {
-    return [];
   }
 }
 
@@ -364,24 +349,17 @@ export async function fetchFormName(formId: string, pageToken: string): Promise<
   }
 }
 
-/** A System User token with ads access, used to read ad names when the Page token cannot.
- *  Facebook Login only grants `ads_management` after App Review, so on an unreviewed app the
- *  Page token is refused the ad node. A System User token is issued in Business Settings and
- *  needs no review, which is what makes ad names resolve automatically. Optional: unset, the
- *  Page token is used and a refusal just leaves the lead with its ad id. */
+/** A System User token with ads access, used to read ad names. The app does not request
+ *  `ads_management` from clients, so the Page token normally cannot read an ad node. A System
+ *  User token is issued in Business Settings and needs no review. Optional: unset, the Page
+ *  token is tried and a refusal just leaves the lead with its ad id. */
 export function metaAdsToken(): string {
   return process.env.META_ADS_TOKEN ?? "";
 }
 
-/** True when a System User token is configured — the settings UI explains the consequence. */
-export function metaAdsTokenConfigured(): boolean {
-  return Boolean(metaAdsToken());
-}
-
 /** An ad's display name, or null when Meta won't tell us (never blocks saving the lead).
- *  Reading an ad node needs `ads_management`, which Facebook Login withholds without App
- *  Review — so META_ADS_TOKEN is tried first and the Page token only as a fallback. Null is
- *  a normal case: the lead keeps its ad id. */
+ *  META_ADS_TOKEN is tried first and the Page token only as a fallback. Null is a normal
+ *  case: the lead keeps its ad id. */
 export async function fetchAdName(adId: string, pageToken: string): Promise<string | null> {
   for (const token of [metaAdsToken(), pageToken]) {
     if (!token) continue;

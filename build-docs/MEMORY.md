@@ -76,3 +76,4 @@ Read at session start; update whenever a decision is made.
 - `crm-app` local checkout is behind origin and holds another developer's uncommitted edits.
 - `ads_management` is requested by the Facebook connect button but is not in the Meta submission (decision pending).
 - Import past leads needs `pages_manage_ads` (not approved yet).
+- 2026-11-18: **`ads_management` removed** from the Facebook Connect scopes and the privacy page (user: "not needed"). Why: full ad-account control just to read an ad name, and not in the App Review submission. Ad names come only from the optional System User token `META_ADS_TOKEN`; otherwise the ad id is shown. Existing connected Pages keep their old grant until reconnected — harmless.

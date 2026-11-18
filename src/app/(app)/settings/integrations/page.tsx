@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserContext } from "@/lib/auth";
-import { metaConfigured, metaAdsTokenConfigured } from "@/lib/meta";
+import { metaConfigured } from "@/lib/meta";
 import { aiConfigured } from "@/lib/ai";
 import IntegrationsClient from "@/components/settings/IntegrationsClient";
 import MetaLeadsCard from "@/components/settings/MetaLeadsCard";
@@ -156,8 +156,6 @@ export default async function IntegrationsPage({
         notice={first(sp.via) === "instagram" ? null : first(sp.meta)}
         reason={first(sp.reason)}
         connectedCount={first(sp.pages)}
-        adsDenied={first(sp.ads) === "denied"}
-        adsTokenConfigured={metaAdsTokenConfigured()}
       />
 
       <InstagramDmCard
