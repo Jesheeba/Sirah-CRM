@@ -65,6 +65,20 @@ export default function SocialInbox({
   pendingTotal: number;
 }) {
   const pending = new Set(pendingIds);
+  // Shown immediately on change; the server value replaces it after refresh (or restores it on error).
+  const [mode, setMode] = useState(replyMode);
+  const [selfApprove, setSelfApprove] = useState(allowSelfApprove);
+  useEffect(() => setMode(replyMode), [replyMode]);
+  useEffect(() => setSelfApprove(allowSelfApprove), [allowSelfApprove]);
+  async function saveMode(nextMode: typeof replyMode, nextSelf: boolean) {
+    setMode(nextMode);
+    setSelfApprove(nextSelf);
+    const ok = await run("mode", () => setReplyMode(nextMode, nextSelf), "Saved.");
+    if (!ok) {
+      setMode(replyMode);
+      setSelfApprove(allowSelfApprove);
+    }
+  }
   const when = (iso: string | null) => formatWhen(iso, timeZone);
   const router = useRouter();
   const [navigating, startNav] = useTransition();
@@ -80,15 +94,19 @@ export default function SocialInbox({
   const firstRow = total === 0 ? 0 : (query.page - 1) * SOCIAL_PAGE_SIZE + 1;
   const lastRow = Math.min(total, firstRow + items.length - 1);
 
-  async function run(key: string, fn: () => Promise<{ ok: boolean; error?: string; stored?: number }>, done?: string) {
+  async function run(key: string, fn: () => Promise<{ ok: boolean; error?: string; stored?: number }>, done?: string): Promise<boolean> {
     setError(null);
     setNotice(null);
     setBusy(key);
     const res = await fn();
     setBusy(null);
-    if (!res.ok) return setError(res.error ?? "Something went wrong.");
+    if (!res.ok) {
+      setError(res.error ?? "Something went wrong.");
+      return false;
+    }
     if (done) setNotice(done.replace("{n}", String(res.stored ?? 0)));
     router.refresh();
+    return true;
   }
 
   if (accounts.length === 0) {
@@ -184,9 +202,9 @@ export default function SocialInbox({
               <label className="flex items-center gap-1">
                 Replies:
                 <select
-                  value={replyMode}
+                  value={mode}
                   disabled={busy === "mode"}
-                  onChange={(e) => run("mode", () => setReplyMode(e.target.value as "human_approval" | "direct", allowSelfApprove), "Saved.")}
+                  onChange={(e) => saveMode(e.target.value as "human_approval" | "direct", selfApprove)}
                   aria-label="How replies are posted"
                   className="rounded-lg border border-slate-200 px-2 py-1"
                 >
@@ -197,9 +215,9 @@ export default function SocialInbox({
               <label className="flex items-center gap-1">
                 <input
                   type="checkbox"
-                  checked={allowSelfApprove}
+                  checked={selfApprove}
                   disabled={busy === "mode"}
-                  onChange={(e) => run("mode", () => setReplyMode(replyMode, e.target.checked), "Saved.")}
+                  onChange={(e) => saveMode(mode, e.target.checked)}
                 />
                 Writer may approve own reply
               </label>
