@@ -9,6 +9,7 @@ import type {
   WebhookChannelInfo,
   WebhookDeliveryInfo,
 } from "@/app/(platform)/platform/actions";
+import { loadSocialDeskStatus } from "@/app/(platform)/platform/actions";
 
 export default async function TenantDetailPage({
   params,
@@ -47,6 +48,7 @@ export default async function TenantDetailPage({
     : { data: [] };
 
   const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
+  const socialDesk = await loadSocialDeskStatus(id);
 
   return (
     <TenantDetailClient
@@ -55,6 +57,7 @@ export default async function TenantDetailPage({
       webhookChannels={(channels ?? []) as WebhookChannelInfo[]}
       webhookDeliveries={(deliveries ?? []) as WebhookDeliveryInfo[]}
       appBase={appBase}
+      socialDesk={socialDesk}
     />
   );
 }

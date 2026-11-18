@@ -8,6 +8,8 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import StatTile from "@/components/charts/StatTile";
 import LeadFeedCard from "@/components/platform/LeadFeedCard";
 import WebhookChannelsCard from "@/components/platform/WebhookChannelsCard";
+import SocialDeskCard from "@/components/platform/SocialDeskCard";
+import type { DeskStatus } from "@/lib/social-desk-setup";
 import { timeAgo, type TenantDetail } from "@/lib/platform";
 import {
   resetTenantPassword,
@@ -23,12 +25,14 @@ export default function TenantDetailClient({
   webhookChannels,
   webhookDeliveries,
   appBase,
+  socialDesk,
 }: {
   tenant: TenantDetail;
   leadFeedKeys: LeadFeedKeyInfo[];
   webhookChannels: WebhookChannelInfo[];
   webhookDeliveries: WebhookDeliveryInfo[];
   appBase: string;
+  socialDesk: DeskStatus;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -193,6 +197,8 @@ export default function TenantDetailClient({
             Platform admins see configuration status only — never message contents or CRM data.
           </p>
         </div>
+
+        <SocialDeskCard tenantId={tenant.id} initial={socialDesk} />
 
         <LeadFeedCard tenantId={tenant.id} initialKeys={leadFeedKeys} appBase={appBase} />
 

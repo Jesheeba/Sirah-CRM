@@ -1,5 +1,6 @@
 "use server";
 
+import { mergeBlocklist, mergeDeskBranding, type DeskStatus } from "@/lib/social-desk-setup";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserContext } from "@/lib/auth";
@@ -312,4 +313,77 @@ export async function resetTenantPassword(input: { tenantId: string; email: stri
   await supabase.rpc("admin_log_password_reset", { p_tenant: input.tenantId, p_email: email });
 
   return { ok: true, email, tempPassword: password };
+}
+
+export interface SocialDeskResult {
+  ok: boolean;
+  error?: string;
+  status?: DeskStatus;
+}
+
+/** Current social-desk setup of a tenant, for the Super Admin tenant page (platform admins only). */
+export async function loadSocialDeskStatus(tenantId: string): Promise<DeskStatus> {
+  const g = await platformAdminClient();
+  if (g.error) return { socialEnabled: false, leadsLabel: null, hasSettings: false, replyMode: null, instagramAccounts: 0 };
+  const { admin } = g;
+  const [{ data: b }, { data: s }, { data: accs }] = await Promise.all([
+    admin.from("organization_branding").select("module_labels, module_visibility").eq("tenant_id", tenantId).maybeSingle(),
+    admin.from("ig_desk_settings").select("reply_mode").eq("tenant_id", tenantId).maybeSingle(),
+    admin.from("ig_accounts").select("id").eq("tenant_id", tenantId).neq("status", "revoked"),
+  ]);
+  const vis = ((b as { module_visibility?: Record<string, unknown> } | null)?.module_visibility ?? {}) as Record<string, unknown>;
+  const labels = ((b as { module_labels?: Record<string, unknown> } | null)?.module_labels ?? {}) as Record<string, unknown>;
+  return {
+    socialEnabled: vis.social === true,
+    leadsLabel: typeof labels.leads === "string" ? labels.leads : null,
+    hasSettings: Boolean(s),
+    replyMode: (s as { reply_mode?: string } | null)?.reply_mode ?? null,
+    instagramAccounts: ((accs ?? []) as unknown[]).length,
+  };
+}
+
+/**
+ * One-step "social desk" setup for a tenant (MLA desk F7): turns on the Social module, optionally
+ * renames Leads to "Issues", and creates reply settings (approval required, no self-approval) with a
+ * starter blocklist. Safe to run again: it merges, never overwrites the tenant's own choices.
+ * Roles: Admin = everything, Manager = approver, Sales Rep = drafter (existing role model).
+ */
+export async function setupSocialDesk(input: { tenantId: string; renameLeads: boolean }): Promise<SocialDeskResult> {
+  const g = await platformAdminClient();
+  if (g.error) return { ok: false, error: g.error };
+  const { admin } = g;
+
+  const { data: tenant } = await admin.from("tenants").select("id").eq("id", input.tenantId).maybeSingle();
+  if (!tenant) return { ok: false, error: "Tenant not found." };
+
+  const { data: b } = await admin
+    .from("organization_branding")
+    .select("module_labels, module_visibility")
+    .eq("tenant_id", input.tenantId)
+    .maybeSingle();
+  const merged = mergeDeskBranding(b as { module_labels?: Record<string, unknown>; module_visibility?: Record<string, unknown> } | null, input.renameLeads);
+  const { error: bErr } = await admin
+    .from("organization_branding")
+    .upsert({ tenant_id: input.tenantId, ...merged }, { onConflict: "tenant_id" });
+  if (bErr) return { ok: false, error: bErr.message };
+
+  const { data: s } = await admin
+    .from("ig_desk_settings")
+    .select("reply_mode, allow_self_approve, blocklist")
+    .eq("tenant_id", input.tenantId)
+    .maybeSingle();
+  const cur = s as { reply_mode?: string; allow_self_approve?: boolean; blocklist?: string[] } | null;
+  const { error: sErr } = await admin.from("ig_desk_settings").upsert(
+    {
+      tenant_id: input.tenantId,
+      reply_mode: cur?.reply_mode ?? "human_approval",
+      allow_self_approve: cur?.allow_self_approve ?? false,
+      blocklist: mergeBlocklist(cur?.blocklist),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "tenant_id" },
+  );
+  if (sErr) return { ok: false, error: sErr.message };
+
+  return { ok: true, status: await loadSocialDeskStatus(input.tenantId) };
 }

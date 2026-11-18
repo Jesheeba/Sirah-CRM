@@ -145,3 +145,14 @@ F4 live: 28/28 on the deployed site (see CHANGELOG).
 | Interaction status becomes issue; lead links back | › one click… (status issue, lead_id) | pass |
 | Existing Meta-lead feed output unchanged | regressions › the Meta lead pull feed is unchanged… | pass |
 | Tenant isolation | › can't turn another organization's item into a lead | pass |
+
+## mla-tenant-onboarding (F7) — 2026-11-18
+`__tests__/social-desk-setup.test.ts` (6). Full suite 329 pass; `tsc` clean; `next build` OK.
+
+| Acceptance criterion | Test | Result |
+|---|---|---|
+| New tenant gets module, settings and defaults in one action | setup › sets up a tenant in one action… | pass |
+| Re-running changes nothing the tenant chose | setup › re-running changes nothing…; merge helpers › idempotent | pass |
+| Existing branding kept | merge helpers › keeps the tenant's other labels and hidden modules | pass |
+| Only platform admins; unknown tenant refused | setup › only platform admins can run it or read the status… | pass |
+| Drafter can't approve, approver can | covered by F4 (ig-reply-actions: rep can't approve, manager can) | pass |

@@ -121,3 +121,13 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
 - Lead page shows the Instagram origin with a link back to Social; `ig_*` keys stay out of "Captured form answers".
 - Meta lead pull feed unaffected (it only exports leads with `fb_leadgen_id`). No migration.
 - Test helper `fake-admin.ts`: added `.is()`.
+
+## 2026-11-18 — feat(mla-tenant-onboarding): one-step social desk setup in Super Admin (MLA desk F7)
+- Super Admin → tenant page → "Instagram social desk" card: switches the Social module on, optionally renames
+  Leads to "Issues", creates reply settings (approval required, no self-approval) and a starter blocklist for
+  sensitive topics. Shows the checklist (module, settings, label, Instagram connected). Safe to re-run: merges,
+  never overwrites the tenant's own labels, hidden modules, reply mode or blocklist words.
+- **Plan change:** no new "Drafter / Approver / Viewer" roles — the app's permission model only knows Admin,
+  Manager and Sales Rep. Mapping: Admin = everything, Manager = approver, Sales Rep = drafter. A read-only
+  viewer role needs permission-model work and is left as a follow-up.
+- Test helper `fake-admin.ts`: added `.neq()`.

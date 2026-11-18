@@ -6,7 +6,7 @@ Stand up the MLA's tenant correctly the first time, with roles that fit an offic
 ## Architecture
 - Provision with the existing Super Admin flow (`provisionTenant`), then a checklist page: connect Instagram → set reply mode →
   write style/facts sheet → invite staff → set retention.
-- Roles added: **Social Drafter**, **Approver** (`ig.approve`), **Social Viewer**; Admin gets all.
+- Roles (as built): existing Admin = everything, Manager = approver, Sales Rep = drafter. A read-only viewer role needs permission-model work — follow-up.
 - Branding labels preset for the tenant ("Issues", "Citizens").
 - Seed: default categories/tags for comments (e.g. Complaint, Request, Praise, Query, Other).
 
