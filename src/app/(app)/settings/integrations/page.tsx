@@ -9,6 +9,8 @@ import MetaLeadsCard from "@/components/settings/MetaLeadsCard";
 import WebToLeadCard from "@/components/settings/WebToLeadCard";
 import InstagramDmCard from "@/components/settings/InstagramDmCard";
 import InstagramCommentCard from "@/components/settings/InstagramCommentCard";
+import InstagramLoginCard, { type IgAccountInfo } from "@/components/settings/InstagramLoginCard";
+import { igConfigured } from "@/lib/ig-login";
 import type { IntegrationSetting, MetaLeadPage } from "@/lib/types";
 import type { InstagramAutomationRule } from "@/lib/instagram-automation";
 import type { InstagramCommentRule } from "@/lib/instagram-comment-automation";
@@ -79,6 +81,12 @@ export default async function IntegrationsPage({
       .eq("channel", "razorpay")
       .maybeSingle(),
   ]);
+
+  // Instagram Login accounts (no Facebook Page). Non-secret columns only; RLS scopes to the tenant.
+  const { data: igData } = await supabase
+    .from("ig_accounts")
+    .select("id, ig_user_id, username, account_type, status, webhook_subscribed, token_expires_at")
+    .order("created_at", { ascending: true });
 
   const settings = (settingsData ?? []) as IntegrationSetting[];
   const rawMetaPages = (pagesData ?? []) as Omit<MetaLeadPage, "has_received_lead">[];
@@ -163,6 +171,14 @@ export default async function IntegrationsPage({
       />
 
       <InstagramCommentCard pages={metaPages} rulesByPage={commentRulesByPage} />
+
+      <InstagramLoginCard
+        accounts={(igData ?? []) as IgAccountInfo[]}
+        configured={igConfigured()}
+        notice={first(sp.ig)}
+        reason={first(sp.reason)}
+        subscribed={first(sp.subscribed)}
+      />
 
       {captureUrl && <WebToLeadCard captureUrl={captureUrl} />}
 

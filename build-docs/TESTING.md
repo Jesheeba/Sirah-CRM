@@ -53,3 +53,19 @@ Design note: the "already has a name" filter was initially written as a
 `.is("custom_fields->>fb_ad_name", null)` clause. Moved into the unit-tested code path instead,
 because a JSONB `->>` null filter that silently matches nothing would make the backfill look like
 a no-op success rather than fail loudly.
+
+## ig-login-connect (F1) — 2026-11-18
+`src/lib/ig-login.test.ts` (15) and `src/lib/__tests__/ig-oauth-callback.test.ts` (9). Full suite 150 pass; `tsc` clean; `next build` OK.
+
+| Acceptance criterion | Test | Result |
+|---|---|---|
+| Professional account connects and shows username | callback › connects a professional account… | pass |
+| Personal account refused, nothing saved | callback › refuses a personal account…; ig-login › accepts Business and Creator… | pass |
+| Token stored only server-side | ig-login › revokes client access and grants only non-secret columns | pass |
+| Token refreshed before expiry (mocked clock) | refresh window; daily refresh job › refreshes only tokens inside the window… | pass |
+| Expired state visible | job › marks a token already past expiry as expired… | pass |
+| Second tenant cannot attach same account | callback › a second tenant cannot attach…; unique ig_user_id | pass |
+| Edge: CSRF state tamper/missing, denied consent, exchange failure, non-admin, subscribe failure, reconnect | callback › rejects…, handles…, reports…, is admin-only, still connects…, reconnecting… | pass |
+
+Not covered: real calls to Instagram (needs IG_APP_ID/SECRET and a test account). Verify on the live
+site after the env vars and migration 0064 are in place: Connect → consent → card shows @handle.

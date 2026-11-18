@@ -52,3 +52,27 @@ Read at session start; update whenever a decision is made.
 - App Review + Business Verification for `ads_management` is still unstarted. It is the only way
   a CLIENT tenant (who cannot be given a System User token on our Business) gets ad names.
   `META_ADS_TOKEN` solves it for Fortune Innovatives' own account only.
+
+## MLA Social Desk (Instagram Login) — added 2026-11-18
+### Decisions
+- 2026-11-18: MLA client = new tenant, Instagram-only → **Instagram Login** product, not Facebook Login. Why: no Page linked.
+- 2026-11-18: reply mode is a per-tenant setting (human approval default; AI/direct optional). Why: user said it is up to the client.
+- 2026-11-18: add `instagram_business_manage_messages`. Build keyword rules + person reply FIRST and submit; AI is Phase B (needs no new permission, so build it during review). Why: reviewers reject permissions they can't see used; AI adds risk and no permission.
+- 2026-11-18: build commit-by-commit on `main`; use a git worktree off `origin/main` when the local folder has someone else's uncommitted edits.
+- 2026-11-17: migration 0063 (lead form/ad dropdown functions + indexes) applied to production.
+- Leads list is server-paged (50/page, URL state: page, view, form, ad, sort, q).
+
+### Constraints / conventions
+- Tokens and secrets: service-role-only tables, RLS on, no policies, grants revoked (0023/0061/0062 pattern).
+- Webhooks: verify signature on raw body first; always 200 to Meta; idempotent on provider id.
+- Windows: run tests/tsc with PowerShell + `node node_modules\vitest\vitest.mjs` (Git Bash path casing breaks vitest).
+- PowerShell `Set-Content -Encoding utf8` adds a BOM — don't use it for SQL or source files.
+- Live end-to-end script: scratchpad `pw/e2e-live.js` (creates a throwaway tenant, deletes it after).
+
+### Open questions
+- See PLAN-mla-social-desk.md "Open questions".
+
+### Known issues
+- `crm-app` local checkout is behind origin and holds another developer's uncommitted edits.
+- `ads_management` is requested by the Facebook connect button but is not in the Meta submission (decision pending).
+- Import past leads needs `pages_manage_ads` (not approved yet).

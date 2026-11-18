@@ -49,3 +49,17 @@ gone — one place, readable.
 - Removed the raw `fb_*` line and the now-dead `sourceEntries`.
 - "Captured form answers" now appears only when there are real answers, instead of rendering an
   empty panel saying "No additional answers captured." for a Meta lead with none.
+
+## 2026-11-18 — feat(ig-login-connect): connect an Instagram account without a Facebook Page (MLA desk F1)
+First feature of the MLA Social Desk (`PLAN-mla-social-desk.md`). A tenant admin can sign in with
+Instagram and connect a Business/Creator account; the CRM stores a 60-day token and keeps it fresh.
+
+- New: `ig_accounts` table (migration 0064; token is service-role only), `lib/ig-login.ts`,
+  `/api/ig/oauth/start` + `/callback`, `lib/ig-token-refresh.ts` (daily, in the workflows tick),
+  `InstagramLoginCard` on Settings → Integrations, disconnect action.
+- Scopes: `instagram_business_basic`, `_manage_comments`, `_manage_messages`; webhook fields
+  `comments,mentions,messages` subscribed on connect.
+- Needs server env `IG_APP_ID` / `IG_APP_SECRET` (the Instagram app id/secret from the Meta app's
+  Instagram product — not the Facebook app id) and migration 0064 applied. Until set, the card
+  shows "not set up yet" and nothing else changes.
+- Also fixed in the same push set: `(app)/layout.tsx` min-w-0 and the Leads toolbar wrap (phone overflow).

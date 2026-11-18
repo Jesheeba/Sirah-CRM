@@ -30,3 +30,6 @@ Dependency-free additions to an existing integration; no sequencing constraints.
 not yet approved:
 1. Add `ads_read` to the OAuth scopes so ad names resolve reliably (needs Meta App Review).
    Run "Fill in ad names" first — if it reports every ad refused, this is the only way forward.
+
+## MLA Social Desk
+See `PLAN-mla-social-desk.md` (Instagram Login, keyword rules, person/AI replies, Meta review readiness). Feature docs: `features/ig-*.md`, `features/mla-tenant-onboarding.md`, `features/meta-*.md`.

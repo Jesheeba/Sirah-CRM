@@ -8,6 +8,7 @@ import { processInactivityDecay } from "@/lib/lead-score-runner";
 import { processReportSchedules } from "@/lib/report-scheduler";
 import { processEmailCampaigns } from "@/lib/campaign-runner";
 import { processMetaDeletionRequests } from "@/lib/meta-data-deletion";
+import { processIgTokenRefresh } from "@/lib/ig-token-refresh";
 
 export const runtime = "nodejs";
 export const maxDuration = 55;
@@ -152,9 +153,12 @@ export async function POST(req: NextRequest) {
   // can respond to Meta within a few seconds instead of deleting inline.
   const metaDeletions = await processMetaDeletionRequests(admin).catch(() => null);
 
+  // Instagram Login tokens last ~60 days — extend any inside the refresh window.
+  const igTokens = await processIgTokenRefresh(admin).catch(() => null);
+
   return NextResponse.json({
     processed: batch.length, done, failed, rotten, sequences, scoreDecay, reportSchedules, campaigns, digest,
-    metaDeletions,
+    metaDeletions, igTokens,
   });
 }
 
