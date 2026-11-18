@@ -9,6 +9,7 @@ import { processReportSchedules } from "@/lib/report-scheduler";
 import { processEmailCampaigns } from "@/lib/campaign-runner";
 import { processMetaDeletionRequests } from "@/lib/meta-data-deletion";
 import { processIgTokenRefresh } from "@/lib/ig-token-refresh";
+import { pollIgTags } from "@/lib/ig-ingest";
 
 export const runtime = "nodejs";
 export const maxDuration = 55;
@@ -155,10 +156,12 @@ export async function POST(req: NextRequest) {
 
   // Instagram Login tokens last ~60 days — extend any inside the refresh window.
   const igTokens = await processIgTokenRefresh(admin).catch(() => null);
+  // Posts that tag an Instagram account have no webhook — poll for them.
+  const igTags = await pollIgTags(admin).catch(() => null);
 
   return NextResponse.json({
     processed: batch.length, done, failed, rotten, sequences, scoreDecay, reportSchedules, campaigns, digest,
-    metaDeletions, igTokens,
+    metaDeletions, igTokens, igTags,
   });
 }
 

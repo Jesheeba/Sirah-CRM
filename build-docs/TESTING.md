@@ -69,3 +69,17 @@ a no-op success rather than fail loudly.
 
 Not covered: real calls to Instagram (needs IG_APP_ID/SECRET and a test account). Verify on the live
 site after the env vars and migration 0064 are in place: Connect → consent → card shows @handle.
+
+## ig-ingest (F2) — 2026-11-18
+`ig-webhook.test.ts` (25) and `__tests__/ig-ingest.test.ts` (18). Full suite 193 pass; `tsc` clean; `next build` OK.
+
+| Acceptance criterion | Test | Result |
+|---|---|---|
+| Same event 3× → one row | ingest › …delivered 3 times…; route › redelivery… | pass |
+| Tampered signature → no row | route › tampered signature…; signature › rejects… | pass |
+| Comment, mention, DM, tag each typed correctly | parse › comments/mentions/direct messages; ingest › stores a comment, a mention and a tag… | pass |
+| Tenant A never sees tenant B's rows | ingest › tenant isolation…; security › RLS + raw not granted | pass |
+| Edge: unknown/revoked account, own comment, echo, hostile payloads, enrichment failure, duplicates in one delivery, emoji/Tamil/long text | ingest › drops…, own comment…, mention whose lookup fails…; parse › never throw, keeps emoji… | pass |
+
+Not covered: real Graph calls (mention lookup, `/tags`) and the live webhook handshake — needs IG_APP_SECRET, a
+connected test account and migration 0065. Verify on the live site: comment from a second account → row appears.

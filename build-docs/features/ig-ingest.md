@@ -8,7 +8,7 @@ Receive every comment, @mention and tagged post for a connected account, reliabl
 - Events: `comments` (comment on our media), `mentions` (@mention in a comment/caption), `messages` (inbound DMs, stored as kind `dm`
   with the sender's last-message time for the 24 h window).
   Mention → fetch detail via Graph (`mentioned_comment` / `mentioned_media`) with the account token.
-- Tagged posts: no webhook → poll `GET /{ig-user-id}/tags` from `workflows/tick` (every ~15 min), cursor stored.
+- Tagged posts: no webhook → poll `GET /{ig-user-id}/tags`. The cron (`vercel.json`) runs **once a day**, so tags arrive daily plus a manual "Refresh" in the inbox (F3, `pollIgTags({tenantId})`). Newest 25 per poll; known ids are skipped, so no cursor is stored.
 - Table `ig_interactions`: tenant_id, ig_account_id, kind (comment/mention/tag), provider_id (unique per account),
   author_handle, author_id, text, media_id, media_url/permalink, parent_id, created_at_provider, received_at,
   status (new/assigned/replied/ignored/issue), assigned_to, raw jsonb.
@@ -26,5 +26,5 @@ Receive every comment, @mention and tagged post for a connected account, reliabl
 
 ## Acceptance criteria
 - Same event delivered 3× → one row. Tampered signature → no row.
-- A comment, a mention and a tag each produce one correctly-typed row within 1 minute (tags ≤ 15 min).
+- A comment, a mention and a DM each produce one correctly-typed row within 1 minute; a tag within 24 h or on manual refresh.
 - Tenant A never sees tenant B's rows (RLS test).

@@ -68,7 +68,7 @@ export function needsRefresh(
   return t - now.getTime() <= windowDays * 86_400_000;
 }
 
-async function igJson(url: URL | string, init?: RequestInit): Promise<Record<string, unknown>> {
+export async function igJson(url: URL | string, init?: RequestInit): Promise<Record<string, unknown>> {
   const res = await fetch(url, { ...init, cache: "no-store" });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   const err = json.error as { message?: string } | undefined;

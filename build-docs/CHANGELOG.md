@@ -63,3 +63,13 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
   Instagram product — not the Facebook app id) and migration 0064 applied. Until set, the card
   shows "not set up yet" and nothing else changes.
 - Also fixed in the same push set: `(app)/layout.tsx` min-w-0 and the Leads toolbar wrap (phone overflow).
+
+## 2026-11-18 — feat(ig-ingest): receive Instagram comments, mentions, DMs and tags (MLA desk F2)
+- New: `ig_interactions` (migration 0065), `POST/GET /api/ig/webhook` (HMAC on the raw body, always 200),
+  `lib/ig-webhook.ts` (pure parser: comments, mentions, DMs in both Meta shapes, echoes dropped),
+  `lib/ig-ingest.ts` (idempotent store, mention text lookup, own-account comments stored as `ignored`,
+  tag polling), `lib/ig-graph.ts`. The daily workflows tick now also polls tags.
+- Tags have no webhook and the cron runs once a day, so tags arrive daily or via the inbox refresh (F3).
+- Needs `IG_APP_SECRET` (signature) and optionally `IG_VERIFY_TOKEN` (falls back to the Meta verify token);
+  set the callback URL `https://<app>/api/ig/webhook` in the Meta app's Instagram product, fields
+  `comments`, `mentions`, `messages`. Needs migration 0065 applied.
