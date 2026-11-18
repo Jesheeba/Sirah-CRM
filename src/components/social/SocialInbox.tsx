@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { assignInteraction, refreshTaggedPosts, setInteractionIgnored } from "@/app/(app)/social/actions";
+import { setReplyMode } from "@/app/(app)/social/reply-actions";
 import { SOCIAL_PAGE_SIZE, formatWhen, socialHref, type SocialKind, type SocialQuery, type SocialStatus } from "@/lib/social-list";
 
 export interface SocialItem {
@@ -44,6 +45,11 @@ export default function SocialInbox({
   members,
   canManage,
   timeZone,
+  isAdmin,
+  replyMode,
+  allowSelfApprove,
+  pendingIds,
+  pendingTotal,
 }: {
   items: SocialItem[];
   total: number;
@@ -52,7 +58,13 @@ export default function SocialInbox({
   members: { id: string; full_name: string | null; email: string | null }[];
   canManage: boolean;
   timeZone: string;
+  isAdmin: boolean;
+  replyMode: "human_approval" | "direct";
+  allowSelfApprove: boolean;
+  pendingIds: string[];
+  pendingTotal: number;
 }) {
+  const pending = new Set(pendingIds);
   const when = (iso: string | null) => formatWhen(iso, timeZone);
   const router = useRouter();
   const [navigating, startNav] = useTransition();
@@ -162,6 +174,40 @@ export default function SocialInbox({
         </form>
       </div>
 
+      {(pendingTotal > 0 || isAdmin) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+          <span className={pendingTotal ? "font-medium text-amber-800" : "text-slate-500"}>
+            {pendingTotal ? `${pendingTotal} repl${pendingTotal === 1 ? "y" : "ies"} waiting for approval` : "No replies waiting for approval"}
+          </span>
+          {isAdmin && (
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+              <label className="flex items-center gap-1">
+                Replies:
+                <select
+                  value={replyMode}
+                  disabled={busy === "mode"}
+                  onChange={(e) => run("mode", () => setReplyMode(e.target.value as "human_approval" | "direct", allowSelfApprove), "Saved.")}
+                  aria-label="How replies are posted"
+                  className="rounded-lg border border-slate-200 px-2 py-1"
+                >
+                  <option value="human_approval">Need approval before posting</option>
+                  <option value="direct">Admins/Managers post directly</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={allowSelfApprove}
+                  disabled={busy === "mode"}
+                  onChange={(e) => run("mode", () => setReplyMode(replyMode, e.target.checked), "Saved.")}
+                />
+                Writer may approve own reply
+              </label>
+            </div>
+          )}
+        </div>
+      )}
+
       {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {notice && <p role="status" className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{notice}</p>}
 
@@ -206,6 +252,7 @@ export default function SocialInbox({
                 <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">{when(it.created_at_provider ?? it.received_at)}</td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLE[it.status]}`}>{it.status}</span>
+                  {pending.has(it.id) && <p className="mt-1 text-xs font-medium text-amber-700">Reply waiting for approval</p>}
                 </td>
                 <td className="px-4 py-3">
                   {canManage ? (

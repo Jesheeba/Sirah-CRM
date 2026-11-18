@@ -100,3 +100,19 @@ connected test account and migration 0065. Verify on the live site: comment from
 | Opt-in module hidden for other tenants | Social module is opt-in (3) | pass |
 
 Live check (Playwright, throwaway tenant): see the run recorded after deploy.
+
+## ig-reply-workflow (F4) — 2026-11-18
+`ig-reply.test.ts` (10) and `__tests__/ig-reply-actions.test.ts` (16). Full suite 246 pass; `tsc` clean; `next build` OK.
+
+| Acceptance criterion | Test | Result |
+|---|---|---|
+| Under human approval nothing reaches Instagram until approved | human approval › a written reply waits… (asserts zero Graph calls) | pass |
+| Rejected draft is never sent | › a rejected reply is never sent | pass |
+| Approved posts exactly once even if approve is clicked twice | › approving twice (double click) posts exactly once | pass |
+| Writer can't self-approve (unless allowed); rep can't approve | › the writer cannot approve…; …unless the organization allows… | pass |
+| Every sent reply has actor + audit rows | › approving posts it once… audit trail drafted/approved/sent | pass |
+| Instagram windows (24 h DM, one private reply in 7 days), channel limits | windows (3); rules enforced on the server (5) | pass |
+| Failure → failed with reason → retry; disconnected account fails safely | failures, retry and isolation (2) | pass |
+| Tenant isolation on submit / approve / reject; only admins change mode | › another organization can't…; › only admins change the reply mode | pass |
+
+Not covered yet: real Graph calls (needs the IG keys, a connected test account and migration 0066). Live check planned after deploy.

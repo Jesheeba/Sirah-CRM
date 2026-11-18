@@ -22,6 +22,8 @@ class FakeQuery implements PromiseLike<{ data: Row[] | Row | null; error: null; 
   }
 
   select(_cols?: string, opts?: { count?: string; head?: boolean }) {
+    // After a write, `.select()` means "return the affected rows" (Postgrest), not "read".
+    if (this.op !== "select") return this;
     this.op = "select";
     this.head = Boolean(opts?.head);
     this.wantCount = Boolean(opts?.count);

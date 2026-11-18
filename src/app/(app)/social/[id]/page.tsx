@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserContext } from "@/lib/auth";
 import { formatWhen } from "@/lib/social-list";
+import { allowedChannels, checkWindow, type ReplyChannel, type ReplyTarget } from "@/lib/ig-reply";
+import ReplyPanel, { type ReplyRow } from "@/components/social/ReplyPanel";
 
 const COLS = "id, kind, author_id, author_handle, text, permalink, media_id, parent_id, provider_id, ig_account_id, created_at_provider, received_at, status";
 type Row = {
@@ -59,6 +61,39 @@ export default async function SocialItemPage({ params }: { params: Promise<{ id:
     thread = (t ?? []) as Row[];
   }
 
+  const [{ data: replies }, { data: settings }, { data: members }] = await Promise.all([
+    supabase
+      .from("ig_replies")
+      .select("id, channel, body, status, drafted_by, approved_by, error, created_at, sent_at")
+      .eq("interaction_id", it.id)
+      .order("created_at", { ascending: true }),
+    supabase.from("ig_desk_settings").select("reply_mode, allow_self_approve").maybeSingle(),
+    supabase.from("profiles").select("id, full_name, email"),
+  ]);
+  const replyRows = (replies ?? []) as ReplyRow[];
+  const names = Object.fromEntries(
+    ((members ?? []) as { id: string; full_name: string | null; email: string | null }[]).map((m) => [m.id, m.full_name || m.email || "someone"]),
+  );
+
+  // What Instagram will accept right now, so the form can say so before anyone writes a reply.
+  const channels = allowedChannels({
+    kind: it.kind as ReplyTarget["kind"],
+    at: it.created_at_provider,
+    mediaId: it.media_id,
+    captionMention: it.kind === "mention" && it.provider_id === it.media_id,
+  });
+  const lastDm = it.kind === "dm" ? thread[thread.length - 1] ?? it : null;
+  const blocked: Partial<Record<ReplyChannel, string>> = {};
+  for (const c of channels) {
+    const w =
+      c === "dm"
+        ? checkWindow("dm", lastDm ? lastDm.created_at_provider ?? lastDm.received_at : null)
+        : c === "private"
+          ? checkWindow("private", it.created_at_provider ?? it.received_at, new Date(), replyRows.some((r) => r.channel === "private" && r.status === "sent"))
+          : checkWindow("public", null);
+    if (!w.ok) blocked[c] = w.reason;
+  }
+
   return (
     <div className="space-y-4">
       <Link href="/social" className="text-sm text-slate-500 hover:text-brand">← Back to Social</Link>
@@ -92,9 +127,18 @@ export default async function SocialItemPage({ params }: { params: Promise<{ id:
         </div>
       )}
 
-      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500" id="reply">
-        Replying from the CRM arrives in the next update.
-      </div>
+      <ReplyPanel
+        interactionId={it.id}
+        channels={channels}
+        blocked={blocked}
+        replies={replyRows}
+        names={names}
+        me={ctx.userId}
+        canManage={ctx.isAdmin || ctx.isManager}
+        mode={(settings?.reply_mode as "human_approval" | "direct" | undefined) ?? "human_approval"}
+        allowSelfApprove={Boolean(settings?.allow_self_approve)}
+        formatWhen={Object.fromEntries(replyRows.map((r) => [r.id, when(r.sent_at ?? r.created_at)]))}
+      />
     </div>
   );
 }

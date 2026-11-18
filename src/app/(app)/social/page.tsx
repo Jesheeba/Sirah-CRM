@@ -25,12 +25,15 @@ export default async function SocialPage({
   const from = (q.page - 1) * SOCIAL_PAGE_SIZE;
   query = query.order("received_at", { ascending: false }).range(from, from + SOCIAL_PAGE_SIZE - 1);
 
-  const [{ data, count }, { data: accounts }, { data: members }, { data: tenant }] = await Promise.all([
-    query,
-    supabase.from("ig_accounts").select("id, username, status").neq("status", "revoked"),
-    supabase.from("profiles").select("id, full_name, email"),
-    supabase.from("tenants").select("timezone").eq("id", ctx.tenantId!).maybeSingle(),
-  ]);
+  const [{ data, count }, { data: accounts }, { data: members }, { data: tenant }, { data: settings }, { data: pending, count: pendingTotal }] =
+    await Promise.all([
+      query,
+      supabase.from("ig_accounts").select("id, username, status").neq("status", "revoked"),
+      supabase.from("profiles").select("id, full_name, email"),
+      supabase.from("tenants").select("timezone").eq("id", ctx.tenantId!).maybeSingle(),
+      supabase.from("ig_desk_settings").select("reply_mode, allow_self_approve").maybeSingle(),
+      supabase.from("ig_replies").select("interaction_id", { count: "exact" }).eq("status", "pending_approval").limit(1000),
+    ]);
 
   return (
     <SocialInbox
@@ -41,6 +44,11 @@ export default async function SocialPage({
       members={(members ?? []) as { id: string; full_name: string | null; email: string | null }[]}
       canManage={ctx.isAdmin || ctx.isManager}
       timeZone={(tenant?.timezone as string | null) || "Asia/Kolkata"}
+      isAdmin={ctx.isAdmin}
+      replyMode={(settings?.reply_mode as "human_approval" | "direct" | undefined) ?? "human_approval"}
+      allowSelfApprove={Boolean(settings?.allow_self_approve)}
+      pendingIds={[...new Set(((pending ?? []) as { interaction_id: string }[]).map((p) => p.interaction_id))]}
+      pendingTotal={pendingTotal ?? 0}
     />
   );
 }

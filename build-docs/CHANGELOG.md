@@ -86,3 +86,15 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
 - New opt-in module `social` in branding: hidden unless a tenant turns it on (Settings → Branding → modules), so
   other tenants don't get an empty menu. Branding settings now load/save opt-in modules correctly.
 - `lib/social-list.ts`: URL parsing (sanitised search) and status rules (assign/unassign, ignore/restore).
+
+## 2026-11-18 — feat(ig-reply-workflow): reply with approval, from the social desk (MLA desk F4, Phase A)
+- Detail page reply panel: public reply (comment / comment mention), private reply (DM to a commenter), DM reply.
+  Shows Instagram's window up front (DM 24 h; private reply once, 7 days) and refuses on the server too.
+- Approval: default "need approval" — Admin/Manager approves, the writer can't approve their own unless the org
+  allows it; approve is claimed atomically so a double click posts once; reject never sends; failed → retry.
+  "Direct" mode lets Admins/Managers post at once (Reps still need approval). Setting is admin-only, on /social.
+- Inbox shows how many replies wait for approval and marks those rows. Audit trail per reply (`ig_reply_events`).
+- New: migration 0066 (`ig_desk_settings`, `ig_replies`, `ig_reply_events`), `lib/ig-reply.ts` (pure rules),
+  `lib/ig-send.ts` (Graph writes), `social/reply-actions.ts`, `components/social/ReplyPanel.tsx`.
+- Test helper `fake-admin.ts`: `.select()` after a write now returns the affected rows (as Postgrest does).
+- No AI in this phase (Phase B, after the Meta submission).
