@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUserContext } from "@/lib/auth";
+import { formatWhen } from "@/lib/social-list";
 
 const COLS = "id, kind, author_id, author_handle, text, permalink, media_id, parent_id, provider_id, ig_account_id, created_at_provider, received_at, status";
 type Row = {
@@ -19,16 +21,19 @@ type Row = {
   status: string;
 };
 
-const when = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
-
 /** One interaction with its context: the DM history with that person, or the comment's thread. */
 export default async function SocialItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data } = await supabase.from("ig_interactions").select(COLS).eq("id", id).maybeSingle();
+  const ctx = (await getUserContext())!;
+  const [{ data }, { data: tenant }] = await Promise.all([
+    supabase.from("ig_interactions").select(COLS).eq("id", id).maybeSingle(),
+    supabase.from("tenants").select("timezone").eq("id", ctx.tenantId!).maybeSingle(),
+  ]);
   if (!data) notFound();
   const it = data as Row;
+  const tz = (tenant?.timezone as string | null) || "Asia/Kolkata";
+  const when = (iso: string | null) => formatWhen(iso, tz, true);
 
   // Context. RLS keeps all of this inside the tenant.
   let thread: Row[] = [];

@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { assignInteraction, refreshTaggedPosts, setInteractionIgnored } from "@/app/(app)/social/actions";
-import { SOCIAL_PAGE_SIZE, socialHref, type SocialKind, type SocialQuery, type SocialStatus } from "@/lib/social-list";
+import { SOCIAL_PAGE_SIZE, formatWhen, socialHref, type SocialKind, type SocialQuery, type SocialStatus } from "@/lib/social-list";
 
 export interface SocialItem {
   id: string;
@@ -36,9 +36,6 @@ const STATUS_STYLE: Record<SocialStatus, string> = {
   deleted: "bg-red-100 text-red-700",
 };
 
-const when = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
-
 export default function SocialInbox({
   items,
   total,
@@ -46,6 +43,7 @@ export default function SocialInbox({
   accounts,
   members,
   canManage,
+  timeZone,
 }: {
   items: SocialItem[];
   total: number;
@@ -53,7 +51,9 @@ export default function SocialInbox({
   accounts: { id: string; username: string | null; status: string }[];
   members: { id: string; full_name: string | null; email: string | null }[];
   canManage: boolean;
+  timeZone: string;
 }) {
+  const when = (iso: string | null) => formatWhen(iso, timeZone);
   const router = useRouter();
   const [navigating, startNav] = useTransition();
   const [search, setSearch] = useState(query.q);

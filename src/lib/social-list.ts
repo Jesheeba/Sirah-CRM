@@ -45,6 +45,21 @@ export function socialHref(q: SocialQuery, over: Partial<SocialQuery> = {}): str
   return s ? `/social?${s}` : "/social";
 }
 
+/** Date + time in the organization's time zone. Explicit zone so the server (UTC) and the
+ *  browser render the same text — otherwise React hydration fails and the page's buttons stop working. */
+export function formatWhen(iso: string | null, timeZone = "Asia/Kolkata", withYear = false): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone };
+  if (withYear) opts.year = "numeric";
+  try {
+    return d.toLocaleString("en-IN", opts);
+  } catch {
+    return d.toLocaleString("en-IN", { ...opts, timeZone: "Asia/Kolkata" }); // unknown zone name
+  }
+}
+
 /** Status after (un)assigning: assigning a new item makes it `assigned`; un-assigning puts it back to `new`.
  *  Finished states (replied / issue / ignored / deleted) keep their status. */
 export function statusAfterAssign(current: SocialStatus, assignee: string | null): SocialStatus {

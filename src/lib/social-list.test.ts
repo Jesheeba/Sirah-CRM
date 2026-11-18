@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSocialQuery, socialHref, statusAfterAssign, statusAfterIgnore } from "./social-list";
+import { formatWhen, parseSocialQuery, socialHref, statusAfterAssign, statusAfterIgnore } from "./social-list";
 import { DEFAULT_LABELS, MODULE_KEYS, resolveVisibility, defaultBranding } from "./branding";
 
 describe("F3 inbox URL state", () => {
@@ -27,6 +27,19 @@ describe("F3 inbox URL state", () => {
     expect(parseSocialQuery(Object.fromEntries(new URL(href, "https://x").searchParams))).toEqual({
       page: 3, kind: "dm", status: "all", mine: true, q: "office",
     });
+  });
+});
+
+describe("F3 dates render identically on server and browser", () => {
+  it("formats in the organization's zone, not the machine's (prevents hydration error #418)", () => {
+    expect(formatWhen("2026-11-18T09:47:00Z", "Asia/Kolkata")).toMatch(/18 Nov.*03:17\s?pm/i);
+    expect(formatWhen("2026-11-18T09:47:00Z", "UTC")).toMatch(/18 Nov.*09:47\s?am/i);
+  });
+  it("includes the year when asked; null/garbage → em dash; unknown zone falls back to IST", () => {
+    expect(formatWhen("2026-11-18T09:47:00Z", "Asia/Kolkata", true)).toMatch(/2026/);
+    expect(formatWhen(null)).toBe("—");
+    expect(formatWhen("nope")).toBe("—");
+    expect(formatWhen("2026-11-18T09:47:00Z", "Not/AZone")).toMatch(/03:17\s?pm/i);
   });
 });
 

@@ -25,10 +25,11 @@ export default async function SocialPage({
   const from = (q.page - 1) * SOCIAL_PAGE_SIZE;
   query = query.order("received_at", { ascending: false }).range(from, from + SOCIAL_PAGE_SIZE - 1);
 
-  const [{ data, count }, { data: accounts }, { data: members }] = await Promise.all([
+  const [{ data, count }, { data: accounts }, { data: members }, { data: tenant }] = await Promise.all([
     query,
     supabase.from("ig_accounts").select("id, username, status").neq("status", "revoked"),
     supabase.from("profiles").select("id, full_name, email"),
+    supabase.from("tenants").select("timezone").eq("id", ctx.tenantId!).maybeSingle(),
   ]);
 
   return (
@@ -39,6 +40,7 @@ export default async function SocialPage({
       accounts={(accounts ?? []) as { id: string; username: string | null; status: string }[]}
       members={(members ?? []) as { id: string; full_name: string | null; email: string | null }[]}
       canManage={ctx.isAdmin || ctx.isManager}
+      timeZone={(tenant?.timezone as string | null) || "Asia/Kolkata"}
     />
   );
 }
