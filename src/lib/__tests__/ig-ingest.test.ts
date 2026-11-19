@@ -48,6 +48,16 @@ describe("F2 ingest", () => {
     expect(enrich).toHaveBeenCalledWith("ig-A", { commentId: "mc1" }, "tokA");
   });
 
+  it("a DM stores the sender's @username looked up from their id; a failed lookup still stores the DM", async () => {
+    const senderHandle = vi.fn().mockResolvedValueOnce("riyazlive").mockRejectedValueOnce(new Error("(#100)"));
+    await ingestIgEvents(asClient(t), [
+      ev({ kind: "dm", providerId: "mid1", authorId: "igsid-1", authorHandle: null }),
+      ev({ kind: "dm", providerId: "mid2", authorId: "igsid-2", authorHandle: null }),
+    ], { senderHandle });
+    expect(senderHandle).toHaveBeenCalledWith("igsid-1", "tokA");
+    expect(t.ig_interactions.map((x) => [x.provider_id, x.author_handle])).toEqual([["mid1", "riyazlive"], ["mid2", null]]);
+  });
+
   it("the same event delivered 3 times makes exactly one row", async () => {
     const client = asClient(t);
     for (let i = 0; i < 3; i++) await ingestIgEvents(client, [ev()]);
@@ -165,7 +175,7 @@ describe("F2 webhook route", () => {
   });
   it("parser + ingest agree end to end on a mixed delivery", async () => {
     const mixed = { entry: [{ id: "ig-A", time: 1, changes: [{ field: "comments", value: { id: "c5" } }], messaging: [{ sender: { id: "u1" }, timestamp: 1, message: { mid: "m5", text: "dm" } }] }] };
-    await ingestIgEvents(asClient(h.state.tables), parseIgWebhook(mixed));
+    await ingestIgEvents(asClient(h.state.tables), parseIgWebhook(mixed), { senderHandle: async () => "u1handle" });
     expect(h.state.tables.ig_interactions.map((x) => x.kind).sort()).toEqual(["comment", "dm"]);
   });
   // Meta allows one callback URL per webhook object; the `instagram` object's URL is

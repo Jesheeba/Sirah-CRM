@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchMention, fetchTags, type EnrichFn } from "@/lib/ig-graph";
+import { fetchMention, fetchSenderHandle, fetchTags, type EnrichFn } from "@/lib/ig-graph";
 import type { IgEvent } from "@/lib/ig-webhook";
 
 export interface IngestResult {
@@ -41,9 +41,10 @@ interface Account {
 export async function ingestIgEvents(
   admin: SupabaseClient,
   events: IgEvent[],
-  deps: { enrich?: EnrichFn } = {},
+  deps: { enrich?: EnrichFn; senderHandle?: (igsid: string, token: string) => Promise<string | null> } = {},
 ): Promise<IngestResult> {
   const enrich = deps.enrich ?? fetchMention;
+  const senderHandle = deps.senderHandle ?? fetchSenderHandle;
   const out: IngestResult = { stored: 0, duplicate: 0, ignored: 0, unknownAccount: 0, created: [] };
   const accounts = new Map<string, Account | null>();
 
@@ -91,6 +92,10 @@ export async function ingestIgEvents(
           permalink = info.permalink ?? permalink;
           occurredAt = info.occurredAt ?? occurredAt;
         }
+      }
+      // DM webhooks carry only the sender id; look up the @username so staff (and reviewers) see who wrote.
+      if (ev.kind === "dm" && !authorHandle && ev.authorId && ev.authorId !== acc.ig_user_id && acc.access_token) {
+        authorHandle = await senderHandle(ev.authorId, acc.access_token).catch(() => null);
       }
 
       const own = ev.authorId === acc.ig_user_id;

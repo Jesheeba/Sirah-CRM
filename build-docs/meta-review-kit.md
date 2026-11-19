@@ -20,6 +20,16 @@ no cuts inside a flow, no AI shown.
 | Unified login → webhooks | **Keep** callback https://sirah-crm-tfvi.vercel.app/api/meta/instagram-webhook (the `instagram` object has one URL, shared with Page-linked DM clients; it also feeds the desk). Subscribed: **comments, mentions, messages** ✅ 2026-11-19 |
 | Vercel env | `META_APP_ID`, `META_APP_SECRET` (exist), **`IG_CONFIG_ID`** = the configuration id, `IG_VERIFY_TOKEN` — redeploy after |
 
+## Live test 2026-11-19 (@sirah_digital → Sirah Digital tenant; second account riyazlive, Instagram Tester)
+| Flow | Result |
+|---|---|
+| Connect (Unified login) + `subscribed_apps` = comments, mentions, messages | ✅ |
+| DM in → webhook → Social inbox | ✅ (sender @username now looked up) |
+| DM reply from CRM → arrives on Instagram | ✅ |
+| Comment in → webhook | ❌ not delivered; Graph API shows `comments_count` but returns no comment data |
+| Why | Meta: comment/mention webhooks and other people's comment data need **Advanced Access** (= approved review). Standard access hides them even from role/tester accounts. |
+| Watch out | Another connected app on @sirah_digital (Connected apps: AiSensy?) auto-sends "Thanks for your comment! Check your DM" — turn it off before recording, or it appears in the video. |
+
 ## Reviewer access
 - CRM login: a dedicated reviewer user in a test tenant (create in Super Admin; give the password only in the
   submission's "test instructions" field — never in chat or docs).

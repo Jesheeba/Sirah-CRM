@@ -44,6 +44,14 @@ export async function fetchMention(
   return null;
 }
 
+/** @username of a DM sender (messaging webhooks carry only the sender's IGSID). */
+export async function fetchSenderHandle(igsid: string, token: string): Promise<string | null> {
+  const url = base(igsid);
+  url.searchParams.set("fields", "username");
+  url.searchParams.set("access_token", token);
+  return str((await igJson(url)).username);
+}
+
 export interface IgTaggedPost {
   id: string;
   username: string | null;

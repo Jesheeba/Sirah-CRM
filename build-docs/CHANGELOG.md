@@ -156,3 +156,6 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
 ## 2026-11-19 — fix(ig-unified-login): desk receives events on the shared Instagram webhook URL
 - Meta config: redirect URL `/api/ig/oauth/callback` registered + selected; `mentions` subscribed on the Unified-login webhook.
 - `/api/meta/instagram-webhook` now also feeds the social desk (`src/lib/ig-desk-webhook.ts`, shared with `/api/ig/webhook`). Why: one callback URL per webhook object.
+
+## 2026-11-19 — fix(ig-ingest): show the DM sender's @username
+- Messaging webhooks carry only the sender id; ingest now looks up `username` (failure still stores the DM). Found in the live test.

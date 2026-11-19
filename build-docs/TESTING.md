@@ -177,3 +177,10 @@ and webhook signing secret on Unified Login — to confirm in the first real con
 ## ig-unified-login shared webhook — 2026-11-19
 - New: shared route feeds legacy handler + desk on a valid signature; stores nothing on a bad one.
 - Full suite 345/345 pass; tsc clean.
+
+## Live end-to-end (production) — 2026-11-19
+- Connect @sirah_digital via Unified login ✅; subscribed_apps = comments, mentions, messages ✅.
+- DM from riyazlive → webhook → ig_interactions ✅; DM reply from CRM (direct mode) delivered on Instagram ✅.
+- Comments: not delivered, Graph hides comment data (comments_count=2, data=[]). Root cause: Meta requires Advanced Access; not a code bug. Simulated signed delivery to the live shared route was stored → pipeline OK.
+- Gap found + fixed: DM sender showed "Unknown sender" → `fetchSenderHandle` at ingest; new unit test. Suite 346/346.
+- Cleanup: test comments deleted; reply mode restored to approval; simulated row deleted.
