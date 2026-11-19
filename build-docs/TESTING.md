@@ -188,3 +188,8 @@ and webhook signing secret on Unified Login — to confirm in the first real con
 ## ig-mention-alerts — 2026-11-19
 - `ig-notify.test.ts`: AC1 admins+managers only, tenant-scoped, link/body; tag wording; AC2 preference off; AC3 old tag silent; AC4 burst → summary; AC5 comment/DM silent; redelivery via ingest alerts once.
 - Suite 353/353; tsc clean. Live: will fire on real mentions only after Advanced Access for `instagram_manage_comments`; tags fire on the next poll.
+
+## Live proof: comment webhooks — 2026-11-19
+- Via our token (`instagram_manage_comments`): created a comment as @sirah_digital on its own post → API read returned it → API reply posted → **Meta delivered both as `comments` webhooks to /api/meta/instagram-webhook; stored in ig_interactions (status ignored = own)** within ~10 s. Deleted after (Instagram + CRM; post back to 0 comments).
+- Same post, same token: riyazlive's comments were counted but hidden. Only difference = author → Standard-access filter on non-owned data, lifted by Advanced Access.
+- Mentions: cannot self-trigger; covered by Meta's confirmed `subscribed_fields` (mentions), signed simulation, unit tests.
