@@ -184,3 +184,7 @@ and webhook signing secret on Unified Login — to confirm in the first real con
 - Comments: not delivered, Graph hides comment data (comments_count=2, data=[]). Root cause: Meta requires Advanced Access; not a code bug. Simulated signed delivery to the live shared route was stored → pipeline OK.
 - Gap found + fixed: DM sender showed "Unknown sender" → `fetchSenderHandle` at ingest; new unit test. Suite 346/346.
 - Cleanup: test comments deleted; reply mode restored to approval; simulated row deleted.
+
+## ig-mention-alerts — 2026-11-19
+- `ig-notify.test.ts`: AC1 admins+managers only, tenant-scoped, link/body; tag wording; AC2 preference off; AC3 old tag silent; AC4 burst → summary; AC5 comment/DM silent; redelivery via ingest alerts once.
+- Suite 353/353; tsc clean. Live: will fire on real mentions only after Advanced Access for `instagram_manage_comments`; tags fire on the next poll.

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchMention, fetchSenderHandle, fetchTags, type EnrichFn } from "@/lib/ig-graph";
+import { notifyIgMentions } from "@/lib/ig-notify";
 import type { IgEvent } from "@/lib/ig-webhook";
 
 export interface IngestResult {
@@ -18,6 +19,7 @@ export interface CreatedInteraction {
   kind: IgEvent["kind"];
   provider_id: string;
   author_id: string | null;
+  author_handle?: string | null;
   text: string | null;
   media_id: string | null;
   created_at_provider: string | null;
@@ -129,11 +131,12 @@ export async function ingestIgEvents(
       if (id) {
         out.created.push({
           id, tenant_id: acc.tenant_id, ig_account_id: acc.id, kind: ev.kind, provider_id: ev.providerId,
-          author_id: ev.authorId, text, media_id: mediaId, created_at_provider: occurredAt, received_at: receivedAt,
+          author_id: ev.authorId, author_handle: authorHandle, text, media_id: mediaId, created_at_provider: occurredAt, received_at: receivedAt,
         });
       }
     }
   }
+  await notifyIgMentions(admin, out.created).catch(() => 0);
   return out;
 }
 

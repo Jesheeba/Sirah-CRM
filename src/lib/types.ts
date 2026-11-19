@@ -134,7 +134,7 @@ export interface Task {
 
 export const TASK_PRIORITIES: TaskPriority[] = ["low", "normal", "high"];
 
-export type NotificationType = "task_assigned" | "deal_won" | "quote_accepted" | "invoice_paid" | "deal_rotten";
+export type NotificationType = "task_assigned" | "deal_won" | "quote_accepted" | "invoice_paid" | "deal_rotten" | "ig_mention";
 
 export interface Notification {
   id: string;
@@ -157,6 +157,7 @@ export const NOTIFICATION_TYPE_META: { type: NotificationType; label: string; de
   { type: "quote_accepted", label: "Quotation accepted", description: "When one of your quotes is accepted." },
   { type: "invoice_paid", label: "Invoice paid", description: "When a payment is received on one of your invoices." },
   { type: "deal_rotten", label: "Deal going stale", description: "When one of your deals sits past its stage's staleness threshold." },
+  { type: "ig_mention", label: "Instagram mention or tag", description: "When someone @mentions or tags your organization's Instagram account (Admins and Managers)." },
 ];
 
 export interface NotificationPreference {

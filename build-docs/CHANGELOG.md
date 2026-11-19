@@ -159,3 +159,6 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
 
 ## 2026-11-19 — fix(ig-ingest): show the DM sender's @username
 - Messaging webhooks carry only the sender id; ingest now looks up `username` (failure still stores the DM). Found in the live test.
+
+## 2026-11-19 — feat(ig-mention-alerts): bell notification when someone @mentions or tags the account
+- Admins/Managers of the tenant get an in-app (realtime) notification linking to the item; respects notification preferences; bursts summarised; old tags from the first poll stay silent. No migration.
