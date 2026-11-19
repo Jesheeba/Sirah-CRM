@@ -152,3 +152,7 @@ Instagram and connect a Business/Creator account; the CRM stores a 60-day token 
 - Graph calls (reads, replies, DMs via `/{ig-id}/messages`) moved to graph.facebook.com v27.0. Webhook signature
   accepted with the Meta app secret (Instagram app secret kept as fallback); comment ids read from `comment_id`.
 - Privacy page and reviewer kit updated: one submission. Inbox, replies, rules, issues, setup, database unchanged.
+
+## 2026-11-19 — fix(ig-unified-login): desk receives events on the shared Instagram webhook URL
+- Meta config: redirect URL `/api/ig/oauth/callback` registered + selected; `mentions` subscribed on the Unified-login webhook.
+- `/api/meta/instagram-webhook` now also feeds the social desk (`src/lib/ig-desk-webhook.ts`, shared with `/api/ig/webhook`). Why: one callback URL per webhook object.

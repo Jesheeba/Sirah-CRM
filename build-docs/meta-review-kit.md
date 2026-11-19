@@ -17,7 +17,7 @@ no cuts inside a flow, no AI shown.
 | Data deletion URL (Facebook Login) | https://sirah-crm-tfvi.vercel.app/api/meta/data-deletion |
 | Unified login → configuration | Create one: Instagram account (required), permissions `instagram_basic`, `instagram_manage_comments`, `instagram_manage_messages` only (untick ads and content publish), token expiration **Never** |
 | Unified login → redirect URL (register + select) | https://sirah-crm-tfvi.vercel.app/api/ig/oauth/callback |
-| Unified login → webhooks | Callback https://sirah-crm-tfvi.vercel.app/api/ig/webhook, verify token = `IG_VERIFY_TOKEN`; subscribe **comments, mentions, messages** |
+| Unified login → webhooks | **Keep** callback https://sirah-crm-tfvi.vercel.app/api/meta/instagram-webhook (the `instagram` object has one URL, shared with Page-linked DM clients; it also feeds the desk). Subscribed: **comments, mentions, messages** ✅ 2026-11-19 |
 | Vercel env | `META_APP_ID`, `META_APP_SECRET` (exist), **`IG_CONFIG_ID`** = the configuration id, `IG_VERIFY_TOKEN` — redeploy after |
 
 ## Reviewer access
@@ -64,7 +64,7 @@ Both usernames visible throughout.
 
 ## Pre-submission checklist
 - [ ] Unified login configuration created; `IG_CONFIG_ID` in Vercel; redeployed.
-- [ ] Redirect URL registered and selected on the configuration; webhooks saved with comments, mentions, messages.
+- [x] Redirect URL registered and selected on the configuration; webhooks saved with comments, mentions, messages (2026-11-19).
 - [ ] Test accounts have app roles and accepted invites; the mentioning account is public.
 - [ ] Real end-to-end run on the live site: connect → comment, mention, DM arrive → replies post.
 - [ ] Playwright live runs pass on a throwaway tenant (scratchpad `pw/e2e-social.js`, `pw/e2e-live.js`).

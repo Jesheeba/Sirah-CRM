@@ -10,7 +10,10 @@ import { parseIgWebhook, type IgEvent } from "@/lib/ig-webhook";
 type Rows = Record<string, Record<string, unknown>[]>;
 const h = vi.hoisted(() => ({ state: { tables: {} as Rows } }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => new FakeAdmin(h.state.tables) }));
+const legacy = vi.hoisted(() => ({ processInstagramWebhookBody: vi.fn(async () => undefined) }));
+vi.mock("@/lib/instagram-webhook-handler", () => legacy);
 import { GET, POST } from "@/app/api/ig/webhook/route";
+import { POST as SHARED_POST } from "@/app/api/meta/instagram-webhook/route";
 
 const asClient = (t: Rows) => new FakeAdmin(t) as unknown as SupabaseClient;
 const ev = (over: Partial<IgEvent> = {}): IgEvent => ({
@@ -164,6 +167,23 @@ describe("F2 webhook route", () => {
     const mixed = { entry: [{ id: "ig-A", time: 1, changes: [{ field: "comments", value: { id: "c5" } }], messaging: [{ sender: { id: "u1" }, timestamp: 1, message: { mid: "m5", text: "dm" } }] }] };
     await ingestIgEvents(asClient(h.state.tables), parseIgWebhook(mixed));
     expect(h.state.tables.ig_interactions.map((x) => x.kind).sort()).toEqual(["comment", "dm"]);
+  });
+  // Meta allows one callback URL per webhook object; the `instagram` object's URL is
+  // /api/meta/instagram-webhook (Page-linked DM clients), so Unified-login desk events arrive there too.
+  it("the shared /api/meta/instagram-webhook feeds both the legacy handler and the desk", async () => {
+    process.env.META_APP_SECRET = "meta-secret";
+    legacy.processInstagramWebhookBody.mockClear();
+    const raw = JSON.stringify(payload);
+    const r = await SHARED_POST(new NextRequest("https://crm.example.com/api/meta/instagram-webhook", { method: "POST", body: raw, headers: { "x-hub-signature-256": sign(raw, "meta-secret") } }));
+    expect(r.status).toBe(200);
+    expect(legacy.processInstagramWebhookBody).toHaveBeenCalledWith(raw);
+    expect(h.state.tables.ig_interactions[0]).toMatchObject({ kind: "comment", provider_id: "c1", tenant_id: "tenant-A" });
+  });
+  it("the shared route stores nothing for the desk when the signature is wrong", async () => {
+    process.env.META_APP_SECRET = "meta-secret";
+    const raw = JSON.stringify(payload);
+    await SHARED_POST(new NextRequest("https://crm.example.com/api/meta/instagram-webhook", { method: "POST", body: raw, headers: { "x-hub-signature-256": sign(raw, "wrong") } }));
+    expect(h.state.tables.ig_interactions).toHaveLength(0);
   });
 });
 

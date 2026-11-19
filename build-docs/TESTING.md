@@ -173,3 +173,7 @@ Updated `ig-login.test.ts`, `__tests__/ig-oauth-callback.test.ts` (multi-account
 never-expiring token), `ig-webhook.test.ts` (either secret; `comment_id`), send-call expectations, `meta-scopes.test.ts`.
 Full suite 343 pass; `tsc` clean. Not verifiable offline: the live login/consent screens, token type, reply/DM endpoints
 and webhook signing secret on Unified Login — to confirm in the first real connect with a test account.
+
+## ig-unified-login shared webhook — 2026-11-19
+- New: shared route feeds legacy handler + desk on a valid signature; stores nothing on a bad one.
+- Full suite 345/345 pass; tsc clean.

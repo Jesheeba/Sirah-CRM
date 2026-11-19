@@ -59,6 +59,7 @@ Read at session start; update whenever a decision is made.
 - 2026-11-18: reply mode is a per-tenant setting (human approval default; AI/direct optional). Why: user said it is up to the client.
 - 2026-11-18: add `instagram_business_manage_messages`. Build keyword rules + person reply FIRST and submit; AI is Phase B (needs no new permission, so build it during review). Why: reviewers reject permissions they can't see used; AI adds risk and no permission.
 - 2026-11-18: build commit-by-commit on `main`; use a git worktree off `origin/main` when the local folder has someone else's uncommitted edits.
+- 2026-11-19: Unified-login webhook keeps callback `/api/meta/instagram-webhook` (not `/api/ig/webhook`). Why: Meta allows one URL per webhook object and the `instagram` object already serves Page-linked DM clients; that route now also calls `processIgDeskBody`. Redirect URL `/api/ig/oauth/callback` registered + selected on config 3830667340420169; `mentions` subscribed.
 - 2026-11-17: migration 0063 (lead form/ad dropdown functions + indexes) applied to production.
 - Leads list is server-paged (50/page, URL state: page, view, form, ad, sort, q).
 

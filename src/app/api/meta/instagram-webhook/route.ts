@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { metaVerifyToken, verifyMetaSignature } from "@/lib/meta";
 import { processInstagramWebhookBody } from "@/lib/instagram-webhook-handler";
+import { processIgDeskBody } from "@/lib/ig-desk-webhook";
 
 /** Webhook verification handshake (Meta calls GET once on subscribe). */
 export async function GET(req: NextRequest) {
@@ -26,5 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
   await processInstagramWebhookBody(raw);
+  // Same `instagram` webhook object also carries the Unified-login social desk's events.
+  await processIgDeskBody(raw);
   return NextResponse.json({ received: true });
 }
