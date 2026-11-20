@@ -426,3 +426,23 @@ export function leadEventBlocksImport(status: string, createdAt: string, now = D
   if (status === "received") return now - new Date(createdAt).getTime() < 10 * 60_000;
   return false;
 }
+
+/**
+ * A Facebook user who manages pages for several clients returns ALL of them on every connect.
+ * Only pages that are new or already belong to this workspace may be saved; a page another
+ * workspace has connected is never moved (moving it silently took client pages away).
+ */
+export function pagesForTenant<P extends { id: string }>(
+  pages: P[],
+  existing: { page_id: string; tenant_id: string | null }[],
+  tenantId: string,
+): { mine: P[]; taken: P[] } {
+  const owner = new Map(existing.map((e) => [e.page_id, e.tenant_id]));
+  const mine: P[] = [];
+  const taken: P[] = [];
+  for (const p of pages) {
+    const t = owner.get(p.id);
+    (t && t !== tenantId ? taken : mine).push(p);
+  }
+  return { mine, taken };
+}

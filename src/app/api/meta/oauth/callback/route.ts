@@ -11,6 +11,7 @@ import {
   subscribePageToLeadgen,
   subscribePageToMessages,
   subscribePageToComments,
+  pagesForTenant,
 } from "@/lib/meta";
 
 /**
@@ -58,8 +59,15 @@ export async function GET(req: NextRequest) {
     const fbUserId = await fetchMetaUserId(userToken);
 
     const admin = createAdminClient();
+    // Never move a page another workspace already connected (same Facebook admin, different client).
+    const { data: existing } = await admin
+      .from("meta_lead_pages")
+      .select("page_id, tenant_id")
+      .in("page_id", pages.map((p) => p.id));
+    const { mine, taken } = pagesForTenant(pages, existing ?? [], ctx.tenantId!);
+    if (!mine.length) return redirectBack(`meta=error&reason=taken${via}`);
     let connected = 0;
-    for (const page of pages) {
+    for (const page of mine) {
       if (intent === "facebook") {
         let subscribed = false;
         try {
@@ -122,7 +130,7 @@ export async function GET(req: NextRequest) {
         `meta=error&reason=${intent === "instagram" ? "noig" : "save"}${via}`,
       );
     }
-    return redirectBack(`meta=connected&pages=${connected}${via}`);
+    return redirectBack(`meta=connected&pages=${connected}${taken.length ? `&taken=${taken.length}` : ""}${via}`);
   } catch {
     return redirectBack(`meta=error&reason=oauth${via}`);
   }

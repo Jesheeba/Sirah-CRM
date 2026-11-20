@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-20 — fix(meta-lead-connect): never move a page from another workspace
+- Incident: connecting TNPSC Mentors (Sirah Digital) with Mohamed Riyaz's Facebook returned every page he manages; the upsert `onConflict: page_id` moved RD Interlock Bricks into Sirah's workspace, and Disconnect there deleted it + unsubscribed its leadgen webhook. RD's 769 leads untouched.
+- `src/lib/meta.ts` `pagesForTenant`: pages owned by another tenant are skipped (`taken`); all-taken → `reason=taken` message.
+- Tests: `meta-page-owner.test.ts` (3). Suite 372 pass, tsc clean.
+- Follow-up: RD must reconnect from RD's own workspace.
+
 ## 2026-11-20 — feat(ig-post-rules): choose a post for an auto-reply rule
 - Rule form: "Choose from recent posts" grid (thumbnail, caption, date) sets `ig_media_id`; rules list shows the post caption.
 - Comment page: "Auto-reply rule for this post" → `/social/rules?media=<id>` opens a rule pre-set to that post.

@@ -52,6 +52,8 @@ Read at session start; update whenever a decision is made.
 
 - 2026-11-20: Import past leads retries `error`/`skipped`/stuck-`received` lead events (upsert on leadgen_id); only `created` or a fresh `received` count as done.
 
+- 2026-11-20 INCIDENT: Facebook connect moved RD Interlock Bricks' page into Sirah's workspace (upsert on page_id), then a Disconnect removed it. Fixed: a page already owned by another tenant is never moved. One Facebook admin manages several clients' Pages — always assume a connect returns pages of other workspaces.
+
 ## Open questions
 - App Review + Business Verification for `ads_management` is still unstarted. It is the only way
   a CLIENT tenant (who cannot be given a System User token on our Business) gets ad names.

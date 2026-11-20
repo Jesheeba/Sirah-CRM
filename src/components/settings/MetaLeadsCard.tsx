@@ -26,6 +26,7 @@ const REASONS: Record<string, string> = {
   nopages: "No Facebook Pages were found on that account.",
   save: "Couldn't save the connected page(s). Please try again.",
   oauth: "Facebook sign-in failed. Please try again.",
+  taken: "Those Facebook Pages are already connected to another workspace, so they were left there.",
 };
 
 export default function MetaLeadsCard({
