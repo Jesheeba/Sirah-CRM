@@ -72,4 +72,33 @@ export async function fetchTags(igUserId: string, token: string, limit = 25): Pr
     .map((p) => ({ id: str(p.id)!, username: str(p.username), caption: str(p.caption), permalink: str(p.permalink), timestamp: str(p.timestamp) }));
 }
 
+export interface IgPost {
+  id: string;
+  caption: string | null;
+  mediaType: string | null;
+  thumbnail: string | null;
+  permalink: string | null;
+  timestamp: string | null;
+}
+
+/** The account's own recent posts and reels, newest first (instagram_basic) — for picking a post in a rule. */
+export async function fetchMedia(igUserId: string, token: string, limit = 24): Promise<IgPost[]> {
+  const url = base(`${igUserId}/media`);
+  url.searchParams.set("fields", "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp");
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("access_token", token);
+  const j = await igJson(url);
+  return ((j.data ?? []) as Record<string, unknown>[])
+    .filter((p) => str(p.id))
+    .map((p) => ({
+      id: str(p.id)!,
+      caption: str(p.caption),
+      mediaType: str(p.media_type),
+      // Videos/reels: media_url is the video file, so the still image is thumbnail_url.
+      thumbnail: str(p.thumbnail_url) ?? (p.media_type === "VIDEO" ? null : str(p.media_url)),
+      permalink: str(p.permalink),
+      timestamp: str(p.timestamp),
+    }));
+}
+
 export type EnrichFn = (igUserId: string, mention: NonNullable<IgEvent["mention"]>, token: string) => Promise<IgEnrichment | null>;

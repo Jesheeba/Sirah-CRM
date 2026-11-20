@@ -193,3 +193,7 @@ and webhook signing secret on Unified Login — to confirm in the first real con
 - Via our token (`instagram_manage_comments`): created a comment as @sirah_digital on its own post → API read returned it → API reply posted → **Meta delivered both as `comments` webhooks to /api/meta/instagram-webhook; stored in ig_interactions (status ignored = own)** within ~10 s. Deleted after (Instagram + CRM; post back to 0 comments).
 - Same post, same token: riyazlive's comments were counted but hidden. Only difference = author → Standard-access filter on non-owned data, lifted by Advanced Access.
 - Mentions: cannot self-trigger; covered by Meta's confirmed `subscribed_fields` (mentions), signed simulation, unit tests.
+
+## ig-post-rules (2026-11-20)
+- `src/lib/__tests__/ig-post-rules.test.ts`: AC1 fetchMedia mapping (reel thumbnail, image media_url, no-id dropped), AC2 token not in errors, AC3 post rule wins / general fallback, AC4 `?media=` validation. All pass; full suite 369/369.
+- Live: `/{ig-user}/media` on @sirah_digital returned 6 reels with thumbnails.

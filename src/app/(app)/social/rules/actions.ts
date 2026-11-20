@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getUserContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { allowedChannels } from "@/lib/ig-reply";
+import { fetchMedia, type IgPost } from "@/lib/ig-graph";
 import { repliesFor, resolveIgRule, validateRule, type IgRule, type RuleInput } from "@/lib/ig-rules";
 
 export interface RuleActionResult {
@@ -127,4 +128,33 @@ export async function testIgRules(input: { kind: "comment" | "mention" | "dm"; t
   const replies = repliesFor(out.rule, allowedChannels({ kind: input.kind, at: null, mediaId: input.mediaId || "post" }));
   const auto = out.rule.send_mode === "auto" && !settings?.auto_paused;
   return { ok: true, outcome: "match", detail: `Rule "${out.rule.name}" would fire.`, replies, sendMode: auto ? "auto" : "needs_approval" };
+}
+
+export interface PostListResult {
+  ok: boolean;
+  posts: (IgPost & { username: string | null })[];
+  error?: string;
+}
+
+/** Recent posts of every connected account, newest first — for "Only on one post" in a rule (admin only). */
+export async function listIgPosts(): Promise<PostListResult> {
+  const g = await adminGuard();
+  if (g.error) return { ok: false, posts: [], error: g.error };
+  const { data: accounts } = await g.admin
+    .from("ig_accounts")
+    .select("ig_user_id, username, access_token")
+    .eq("tenant_id", g.ctx.tenantId!)
+    .eq("status", "active");
+  if (!accounts?.length) return { ok: false, posts: [], error: "No Instagram account is connected." };
+  const posts: PostListResult["posts"] = [];
+  const errors: string[] = [];
+  for (const a of accounts) {
+    try {
+      for (const p of await fetchMedia(a.ig_user_id as string, a.access_token as string)) posts.push({ ...p, username: (a.username as string | null) ?? null });
+    } catch (e) {
+      errors.push(`@${a.username ?? "account"}: ${e instanceof Error ? e.message : "could not load posts"}`);
+    }
+  }
+  posts.sort((x, y) => (y.timestamp ?? "").localeCompare(x.timestamp ?? ""));
+  return posts.length || !errors.length ? { ok: true, posts } : { ok: false, posts: [], error: errors.join("; ") };
 }

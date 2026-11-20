@@ -3,12 +3,17 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserContext } from "@/lib/auth";
 import RulesManager from "@/components/social/RulesManager";
-import type { IgRule } from "@/lib/ig-rules";
+import { mediaIdParam, type IgRule } from "@/lib/ig-rules";
 
 /** Automatic replies (keyword rules) for the Instagram social desk — admins only (F9). */
-export default async function SocialRulesPage() {
+export default async function SocialRulesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const ctx = await getUserContext();
   if (!ctx?.isAdmin) redirect("/social");
+  const initialMediaId = mediaIdParam((await searchParams).media);
   const supabase = await createClient();
   const [{ data: rules }, { data: settings }, { data: accounts }] = await Promise.all([
     supabase.from("ig_rules").select("*").order("priority", { ascending: true }).order("name"),
@@ -22,6 +27,7 @@ export default async function SocialRulesPage() {
       <Link href="/social" className="text-sm text-slate-500 hover:text-brand">← Back to Social</Link>
       <RulesManager
         rules={(rules ?? []) as IgRule[]}
+        initialMediaId={initialMediaId}
         accounts={(accounts ?? []) as { id: string; username: string | null }[]}
         settings={{
           blocklist: s?.blocklist ?? [],

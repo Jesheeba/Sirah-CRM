@@ -148,3 +148,8 @@ export function validateRule(input: RuleInput): { ok: true; rule: RuleInput } | 
     },
   };
 }
+
+/** `?media=` on the rules page: only Instagram's numeric media ids are accepted. */
+export function mediaIdParam(v: unknown): string | null {
+  return typeof v === "string" && /^\d{5,30}$/.test(v) ? v : null;
+}

@@ -117,6 +117,11 @@ export default async function SocialItemPage({ params }: { params: Promise<{ id:
             </a>
           )}
           <IssueButton interactionId={it.id} leadId={it.lead_id} label={branding.labels.leads} />
+          {ctx.isAdmin && it.kind === "comment" && it.media_id && (
+            <Link href={`/social/rules?media=${encodeURIComponent(it.media_id)}`} className="text-sm text-brand hover:underline">
+              Auto-reply rule for this post
+            </Link>
+          )}
         </div>
       </div>
 

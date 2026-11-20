@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import {
   deleteIgRule,
+  listIgPosts,
   saveAutomationSettings,
   saveIgRule,
   setIgRuleEnabled,
   testIgRules,
+  type PostListResult,
   type RuleTestResult,
 } from "@/app/(app)/social/rules/actions";
 import type { IgRule, RuleAction, RuleAppliesTo } from "@/lib/ig-rules";
@@ -45,13 +47,18 @@ export default function RulesManager({
   rules,
   accounts,
   settings,
+  initialMediaId = null,
 }: {
   rules: IgRule[];
+  /** From `?media=` (the comment page's "rule for this post" link): open a new rule tied to that post. */
+  initialMediaId?: string | null;
   accounts: { id: string; username: string | null }[];
   settings: { blocklist: string[]; autoPaused: boolean; hourlyCap: number; dailyCap: number };
 }) {
   const router = useRouter();
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(initialMediaId ? { ...blank(), ig_media_id: initialMediaId } : null);
+  const [posts, setPosts] = useState<PostListResult | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -59,6 +66,23 @@ export default function RulesManager({
   const [safety, setSafety] = useState({ blocklist: settings.blocklist.join("\n"), autoPaused: settings.autoPaused, hourlyCap: settings.hourlyCap, dailyCap: settings.dailyCap });
   const [test, setTest] = useState<{ kind: RuleAppliesTo; text: string }>({ kind: "comment", text: "" });
   const [testResult, setTestResult] = useState<RuleTestResult | null>(null);
+
+  async function loadPosts() {
+    if (posts?.ok || busy === "posts") return;
+    setBusy("posts");
+    setPosts(await listIgPosts().catch(() => ({ ok: false, posts: [], error: "Could not load posts." })));
+    setBusy(null);
+  }
+  // Rules limited to a post show its caption, so fetch the post list once when any exist.
+  useEffect(() => {
+    if (initialMediaId || rules.some((r) => r.ig_media_id)) void loadPosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const postById = (id: string | null) => (id ? posts?.posts.find((p) => p.id === id) : undefined);
+  const postLabel = (id: string) => {
+    const p = postById(id);
+    return p ? (p.caption?.slice(0, 40) || `${p.mediaType === "VIDEO" ? "Reel" : "Post"} of ${p.timestamp?.slice(0, 10) ?? ""}`) : "one post";
+  };
 
   async function run(key: string, fn: () => Promise<{ ok: boolean; error?: string }>, done?: string) {
     setError(null);
@@ -273,11 +297,70 @@ export default function RulesManager({
             )}
             {draft.applies_to === "comment" && (
               <label className="text-sm text-slate-700">
-                Only on one post (post ID, optional)
-                <input value={draft.ig_media_id ?? ""} onChange={(e) => set({ ig_media_id: e.target.value })} className={`${input} mt-1`} placeholder="Leave empty for every post" />
+                Only on one post (optional)
+                <input value={draft.ig_media_id ?? ""} onChange={(e) => set({ ig_media_id: e.target.value })} className={`${input} mt-1`} placeholder="Leave empty for every post — or choose below" />
               </label>
             )}
           </div>
+
+          {draft.applies_to === "comment" && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setPickerOpen((o) => !o); void loadPosts(); }}
+                  aria-expanded={pickerOpen}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  {pickerOpen ? "Hide posts" : "Choose from recent posts"}
+                </button>
+                {draft.ig_media_id && (
+                  <>
+                    <span className="text-sm text-slate-600">Only on: <strong>{postLabel(draft.ig_media_id)}</strong></span>
+                    <button type="button" onClick={() => set({ ig_media_id: null })} className="text-sm text-slate-500 underline hover:text-slate-700">
+                      Every post
+                    </button>
+                  </>
+                )}
+              </div>
+              {pickerOpen && (
+                busy === "posts" ? (
+                  <p className="text-sm text-slate-500" role="status">Loading posts…</p>
+                ) : posts && !posts.ok ? (
+                  <p className="text-sm text-red-600" role="alert">{posts.error}</p>
+                ) : posts && posts.posts.length === 0 ? (
+                  <p className="text-sm text-slate-500">No posts found on the connected account.</p>
+                ) : (
+                  <ul className="grid max-h-96 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-4 lg:grid-cols-6" aria-label="Recent posts">
+                    {(posts?.posts ?? []).map((p) => {
+                      const chosen = draft.ig_media_id === p.id;
+                      return (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onClick={() => { set({ ig_media_id: p.id }); setPickerOpen(false); }}
+                            aria-pressed={chosen}
+                            className={`w-full overflow-hidden rounded-lg border text-left ${chosen ? "border-brand ring-2 ring-brand" : "border-slate-200 hover:border-slate-400"}`}
+                          >
+                            {p.thumbnail ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.thumbnail} alt="" className="aspect-square w-full bg-slate-100 object-cover" loading="lazy" />
+                            ) : (
+                              <div className="flex aspect-square w-full items-center justify-center bg-slate-100 text-xs text-slate-400">No preview</div>
+                            )}
+                            <span className="block truncate px-2 pt-1 text-xs text-slate-700">{p.caption || "(no caption)"}</span>
+                            <span className="block px-2 pb-1 text-[11px] text-slate-400">
+                              {p.mediaType === "VIDEO" ? "Reel" : p.mediaType === "CAROUSEL_ALBUM" ? "Carousel" : "Post"} · {p.timestamp?.slice(0, 10)}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )
+              )}
+            </div>
+          )}
 
           <div className="flex gap-2">
             <button type="submit" disabled={busy === "save"} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
@@ -309,7 +392,7 @@ export default function RulesManager({
             )}
             {rules.map((r) => (
               <tr key={r.id} className="align-top">
-                <td className="px-4 py-3 font-medium text-slate-800">{r.name}<p className="text-xs font-normal text-slate-400">priority {r.priority}{r.ig_media_id ? " · one post" : ""}</p></td>
+                <td className="px-4 py-3 font-medium text-slate-800">{r.name}<p className="text-xs font-normal text-slate-400">priority {r.priority}{r.ig_media_id ? ` · only on: ${postLabel(r.ig_media_id)}` : ""}</p></td>
                 <td className="px-4 py-3 text-slate-600">{APPLIES[r.applies_to]}</td>
                 <td className="max-w-xs px-4 py-3 text-slate-600">{r.rule_type === "always" ? "Everything" : `${r.match_mode === "all" ? "All of" : "Any of"}: ${r.match_keywords.join(", ")}`}</td>
                 <td className="px-4 py-3 text-slate-600">{r.send_mode === "auto" ? "Posts automatically" : "Waits for approval"}</td>

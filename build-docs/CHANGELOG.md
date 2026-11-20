@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-20 — feat(ig-post-rules): choose a post for an auto-reply rule
+- Rule form: "Choose from recent posts" grid (thumbnail, caption, date) sets `ig_media_id`; rules list shows the post caption.
+- Comment page: "Auto-reply rule for this post" → `/social/rules?media=<id>` opens a rule pre-set to that post.
+- `ig-graph.ts` `fetchMedia`; rules `listIgPosts` (admin only); `ig-rules.ts` `mediaIdParam`.
+- Tests: `ig-post-rules.test.ts` (AC1–AC4). Suite 369 pass, tsc clean. Live Graph check: 6 reels returned for @sirah_digital.
+
 ## 2026-11-20 — fix(meta-lead-import): re-import leads whose webhook failed
 - Before: a failed/skipped webhook left a `meta_lead_events` row, and Import past leads treated it as done, so the lead was lost for good (2 Fortune leads in Sept).
 - `src/lib/meta.ts`: `leadEventBlocksImport` — only `created`, or `received` < 10 min, block re-import.
