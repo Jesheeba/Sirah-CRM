@@ -54,6 +54,8 @@ Read at session start; update whenever a decision is made.
 
 - 2026-11-20 INCIDENT: Facebook connect moved RD Interlock Bricks' page into Sirah's workspace (upsert on page_id), then a Disconnect removed it. Fixed: a page already owned by another tenant is never moved. One Facebook admin manages several clients' Pages — always assume a connect returns pages of other workspaces.
 
+- 2026-11-20: App Review SUBMITTED (submission 1807922953845814): pages_manage_ads, instagram_manage_comments, instagram_manage_messages, instagram_basic + 6 renewals. Captioned screencasts (user-recorded), new usage texts answering the Oct-13 'screencast not aligned' rejection, system-user-token note, reviewer login = Installtech test workspace. Data handling: processors Supabase + Vercel (added). Keep until decision: TNPSC test lead, 'Saree link - Pink' + 'Street light complaint' rules, @sirah_digital connection.
+
 ## Open questions
 - App Review + Business Verification for `ads_management` is still unstarted. It is the only way
   a CLIENT tenant (who cannot be given a System User token on our Business) gets ad names.
