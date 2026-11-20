@@ -50,6 +50,8 @@ Read at session start; update whenever a decision is made.
 
 - 2026-11-20: Vercel functions pinned to `sin1` (vercel.json `regions`). Supabase is ap-southeast-1; functions ran in iad1, so every DB call crossed the globe (~230 ms × ~15 per page). `getUserContext` and layout branding are memoised per request with React `cache()`.
 
+- 2026-11-20: Import past leads retries `error`/`skipped`/stuck-`received` lead events (upsert on leadgen_id); only `created` or a fresh `received` count as done.
+
 ## Open questions
 - App Review + Business Verification for `ads_management` is still unstarted. It is the only way
   a CLIENT tenant (who cannot be given a System User token on our Business) gets ad names.

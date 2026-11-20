@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getUserContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { unsubscribePage, fetchPageForms, fetchFormLeads, fetchAdName, mapLead } from "@/lib/meta";
+import { unsubscribePage, fetchPageForms, fetchFormLeads, fetchAdName, mapLead, leadEventBlocksImport } from "@/lib/meta";
 import { distinctAdIds, mergedCustomFields, type BackfillLeadRow } from "@/lib/ad-name-backfill";
 
 export interface MetaActionResult {
@@ -141,9 +141,11 @@ export async function importHistoricalLeads(pageId: string): Promise<ImportResul
     for (let i = 0; i < all.length; i += 200) {
       const { data } = await admin
         .from("meta_lead_events")
-        .select("leadgen_id")
+        .select("leadgen_id, status, created_at")
         .in("leadgen_id", all.slice(i, i + 200).map((x) => x.raw.id));
-      for (const r of data ?? []) known.add(r.leadgen_id as string);
+      for (const r of data ?? []) {
+        if (leadEventBlocksImport(r.status as string, r.created_at as string)) known.add(r.leadgen_id as string);
+      }
     }
     const fresh = all.filter((x) => !known.has(x.raw.id));
     skipped = all.length - fresh.length;
@@ -206,7 +208,8 @@ export async function importHistoricalLeads(pageId: string): Promise<ImportResul
       const leadIdByLeadgen = new Map<string, string>(
         (created ?? []).map((l) => [(l.custom_fields as Record<string, string>).fb_leadgen_id, l.id as string]),
       );
-      const { error: evErr } = await admin.from("meta_lead_events").insert(
+      // Upsert: a failed webhook delivery left a row for this leadgen id (unique); overwrite it.
+      const { error: evErr } = await admin.from("meta_lead_events").upsert(
         batch.map(({ raw, formId }) => ({
           tenant_id: g.ctx.tenantId,
           leadgen_id: raw.id,
@@ -214,7 +217,9 @@ export async function importHistoricalLeads(pageId: string): Promise<ImportResul
           form_id: formId,
           lead_id: leadIdByLeadgen.get(raw.id) ?? null,
           status: "created",
+          error: null,
         })),
+        { onConflict: "leadgen_id" },
       );
       if (evErr) throw new Error(`Recording imported leads failed: ${evErr.message}`);
 

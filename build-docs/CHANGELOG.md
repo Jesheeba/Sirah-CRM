@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-20 — fix(meta-lead-import): re-import leads whose webhook failed
+- Before: a failed/skipped webhook left a `meta_lead_events` row, and Import past leads treated it as done, so the lead was lost for good (2 Fortune leads in Sept).
+- `src/lib/meta.ts`: `leadEventBlocksImport` — only `created`, or `received` < 10 min, block re-import.
+- `meta-actions.ts`: event write is an upsert on `leadgen_id` (unique), clearing `error`.
+- Tests: `meta-import-retry.test.ts` (5). Suite 358 pass, tsc clean.
+
 ## 2026-11-20 — fix(perf): faster page loads
 - `vercel.json`: `regions: ["sin1"]`, next to the Supabase DB (was iad1, USA).
 - `src/lib/auth.ts`: `getUserContext` wrapped in React `cache()` (was run 3× per page: metadata, layout, page).

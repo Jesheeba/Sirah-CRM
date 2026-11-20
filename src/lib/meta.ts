@@ -415,3 +415,14 @@ export function verifyMetaSignature(rawBody: string, header: string | null): boo
   const b = Buffer.from(expected);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
+
+/**
+ * Should "Import past leads" leave this lead alone? Only when it was already created, or a
+ * webhook is still working on it (received < 10 min ago). Failed, skipped or stuck deliveries
+ * are re-imported, so a lead missed while a token was broken is not lost for good.
+ */
+export function leadEventBlocksImport(status: string, createdAt: string, now = Date.now()): boolean {
+  if (status === "created") return true;
+  if (status === "received") return now - new Date(createdAt).getTime() < 10 * 60_000;
+  return false;
+}
