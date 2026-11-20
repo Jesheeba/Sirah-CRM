@@ -48,6 +48,8 @@ Read at session start; update whenever a decision is made.
   roles. A System User token needs no review, so it is the only route to automatic ad names
   before review. Unset, behaviour is unchanged: leads keep their ad id.
 
+- 2026-11-20: Vercel functions pinned to `sin1` (vercel.json `regions`). Supabase is ap-southeast-1; functions ran in iad1, so every DB call crossed the globe (~230 ms × ~15 per page). `getUserContext` and layout branding are memoised per request with React `cache()`.
+
 ## Open questions
 - App Review + Business Verification for `ads_management` is still unstarted. It is the only way
   a CLIENT tenant (who cannot be given a System User token on our Business) gets ad names.

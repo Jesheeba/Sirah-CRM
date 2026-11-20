@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getUserContext } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -9,13 +10,15 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import MobileNav from "@/components/MobileNav";
 
+// One branding read per request, shared by generateMetadata and the layout.
+const brandingFor = cache(async (tenantId: string) => fetchBranding(await createClient(), tenantId));
+
 // Per-tenant browser tab title + favicon. Runs per request; falls back to the
 // org name and the default icon when no branding row exists.
 export async function generateMetadata(): Promise<Metadata> {
   const ctx = await getUserContext();
   if (!ctx?.tenantId) return {};
-  const supabase = await createClient();
-  const b = await fetchBranding(supabase, ctx.tenantId);
+  const b = await brandingFor(ctx.tenantId);
   const title = b.browserTitle || b.brandName || ctx.tenantName || "CRM";
   return {
     title,
@@ -35,7 +38,7 @@ export default async function AppLayout({
   if (ctx.tenantStatus === "suspended" && !ctx.isPlatformAdmin) redirect("/suspended");
 
   const branding = ctx.tenantId
-    ? await fetchBranding(await createClient(), ctx.tenantId)
+    ? await brandingFor(ctx.tenantId)
     : defaultBranding();
   const rampStyle = brandRampStyle(branding.primaryColor);
   const orgName = branding.brandName ?? ctx.tenantName;

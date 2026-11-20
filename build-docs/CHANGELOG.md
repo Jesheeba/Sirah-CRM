@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-20 — fix(perf): faster page loads
+- `vercel.json`: `regions: ["sin1"]`, next to the Supabase DB (was iad1, USA).
+- `src/lib/auth.ts`: `getUserContext` wrapped in React `cache()` (was run 3× per page: metadata, layout, page).
+- `src/app/(app)/layout.tsx`: branding read once per request.
+- Tests: 353 pass, tsc clean.
+
 ## 2026-11-06 — feat(meta-lead-ad-attribution)
 Show the ad behind every Meta lead.
 

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 
 export type Role = "Admin" | "Manager" | "Sales Rep";
@@ -18,8 +19,9 @@ export interface UserContext {
 /**
  * Resolves the signed-in user, their org, and their highest role.
  * Returns null when there is no authenticated user or no profile yet.
+ * Memoised per request (React cache): layout, metadata and page share one lookup.
  */
-export async function getUserContext(): Promise<UserContext | null> {
+export const getUserContext = cache(async (): Promise<UserContext | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -63,4 +65,4 @@ export async function getUserContext(): Promise<UserContext | null> {
     isRep: role === "Sales Rep",
     isPlatformAdmin: Boolean(paRow),
   };
-}
+});
