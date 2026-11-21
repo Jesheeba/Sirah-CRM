@@ -112,7 +112,9 @@ export default function InstagramLoginCard({
                     <span className="font-medium text-red-600">Expired — reconnect to resume</span>
                   ) : (
                     <>
-                      Active · token valid until {fmtDate(a.token_expires_at)} (renews automatically)
+                      Active · {a.token_expires_at
+                        ? `token valid until ${fmtDate(a.token_expires_at)} (renews automatically)`
+                        : "token never expires"}
                     </>
                   )}
                   {a.status === "active" && !a.webhook_subscribed && (

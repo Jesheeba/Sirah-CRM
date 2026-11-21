@@ -51,7 +51,7 @@ const REASONS: Record<string, string> = {
 export default function InstagramDmCard({
   pages,
   rulesByPage,
-  aiConfigured,
+  aiKeyMissing,
   configured,
   notice,
   reason,
@@ -60,7 +60,8 @@ export default function InstagramDmCard({
   /** Only pages with a linked Instagram Business Account are shown. */
   pages: MetaLeadPage[];
   rulesByPage: Record<string, InstagramAutomationRule[]>;
-  aiConfigured: boolean;
+  /** Platform admins only: the server has no ANTHROPIC_API_KEY. Tenants never see this setup detail. */
+  aiKeyMissing: boolean;
   configured: boolean;
   notice: string | null;
   reason: string | null;
@@ -161,7 +162,7 @@ export default function InstagramDmCard({
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
-      {!aiConfigured && (
+      {aiKeyMissing && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
           ANTHROPIC_API_KEY isn&apos;t set — AI-drafted fallback replies won&apos;t send until it is.
         </p>

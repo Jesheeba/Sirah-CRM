@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-21 — fix(integrations-ui): tenant-facing wording
+- `InstagramDmCard`: the ANTHROPIC_API_KEY warning shows only to platform admins (prop `aiKeyMissing`), not to every tenant.
+- `InstagramLoginCard`: a token with no expiry (system-user) reads "token never expires" instead of "valid until —".
+- tsc clean, 372 tests pass.
+
 ## 2026-11-20 — fix(meta-lead-connect): never move a page from another workspace
 - Incident: connecting TNPSC Mentors (Sirah Digital) with Mohamed Riyaz's Facebook returned every page he manages; the upsert `onConflict: page_id` moved RD Interlock Bricks into Sirah's workspace, and Disconnect there deleted it + unsubscribed its leadgen webhook. RD's 769 leads untouched.
 - `src/lib/meta.ts` `pagesForTenant`: pages owned by another tenant are skipped (`taken`); all-taken → `reason=taken` message.

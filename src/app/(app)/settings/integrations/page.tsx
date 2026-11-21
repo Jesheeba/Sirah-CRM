@@ -161,7 +161,7 @@ export default async function IntegrationsPage({
       <InstagramDmCard
         pages={metaPages}
         rulesByPage={rulesByPage}
-        aiConfigured={aiConfigured()}
+        aiKeyMissing={Boolean(ctx?.isPlatformAdmin) && !aiConfigured()}
         configured={metaConfigured()}
         notice={first(sp.via) === "instagram" ? first(sp.meta) : null}
         reason={first(sp.reason)}
